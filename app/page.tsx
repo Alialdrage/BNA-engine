@@ -80,7 +80,7 @@ export default function BNAEngine() {
           </p>
         </header>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-7">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-9">
           {ENGINES.map((e) => {
             const active = engine === e.id;
             return (

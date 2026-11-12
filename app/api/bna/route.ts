@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { MAX_INPUT_LENGTH, isEngineId, runEngine } from '@/lib/bna-engine';
-import { llmAvailable } from '@/lib/llm';
+import { MAX_INPUT_LENGTH, callsPaidApi, isEngineId, runEngine } from '@/lib/bna-engine';
 import { checkRateLimit, clientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -32,9 +31,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // حد الطلبات يطبق فقط على المحركات التي تستدعي Claude API (وتكلّف مالاً)
-  const usesAi = llmAvailable() && (engine === 'AUTO' || engine === 'ML' || engine === 'NLP');
-  if (usesAi) {
+  // حد الطلبات يطبق فقط على المحركات التي تستدعي واجهة ذكاء اصطناعي مدفوعة (Claude أو Gemini)
+  if (callsPaidApi(engine)) {
     const limit = Number(process.env.AI_RATE_LIMIT_PER_MINUTE) || DEFAULT_AI_LIMIT_PER_MINUTE;
     const rl = checkRateLimit(`ai:${clientIp(request)}`, limit, 60_000);
     if (!rl.ok) {
