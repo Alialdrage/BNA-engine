@@ -2,7 +2,126 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  min-height: 100vh;
-  background: radial-gradient(circle at center, #001a33 0%, #000000 100%);
+@layer base {
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 12% 8%, rgba(99, 102, 241, 0.35), transparent 40%),
+      radial-gradient(circle at 88% 92%, rgba(34, 211, 238, 0.22), transparent 45%),
+      linear-gradient(160deg, #0b0a24 0%, #1e1b4b 45%, #020617 100%);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  /* زجاج نيلي شفاف بحافة سماوية متوهجة */
+  .glass {
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.2),
+      rgba(14, 165, 233, 0.06) 60%,
+      rgba(6, 182, 212, 0.12)
+    );
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgba(125, 211, 252, 0.25);
+    box-shadow:
+      0 0 40px rgba(34, 211, 238, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  /* إضاءة تتبع المؤشر داخل العنصر */
+  .spotlight {
+    position: relative;
+    overflow: hidden;
+  }
+  .spotlight::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      260px circle at var(--x, 50%) var(--y, 50%),
+      rgba(34, 211, 238, 0.22),
+      rgba(99, 102, 241, 0.08) 45%,
+      transparent 70%
+    );
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+  .spotlight:hover::before {
+    opacity: 1;
+  }
+
+  /* نص بتدرج سماوي نيلي مع توهج نيون */
+  .neon-text {
+    background-image: linear-gradient(90deg, #67e8f9, #38bdf8 45%, #818cf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter:
+      drop-shadow(0 0 12px rgba(56, 189, 248, 0.7))
+      drop-shadow(0 0 30px rgba(99, 102, 241, 0.5));
+  }
+
+  /* كرات ضوئية تطفو في الخلفية */
+  .orb {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(80px);
+    pointer-events: none;
+    animation: float 14s ease-in-out infinite;
+  }
+
+  .fade-up {
+    animation: fade-up 0.5s ease-out both;
+  }
+
+  /* حالة التحميل: تدرج متحرك */
+  .btn-loading {
+    background-image: linear-gradient(90deg, #0891b2, #67e8f9, #6366f1, #0891b2);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -24px, 0) scale(1.08);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
