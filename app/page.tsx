@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import BookStudio from '@/components/BookStudio';
 import Games from '@/components/Games';
 import { ENGINES, MAX_INPUT_LENGTH, type EngineId } from '@/lib/engines';
 
@@ -82,7 +83,7 @@ function trackPointer(e: MouseEvent<HTMLElement>) {
 
 export default function BNAEngine() {
   const [input, setInput] = useState('');
-  const [tab, setTab] = useState<'engines' | 'games'>('engines');
+  const [tab, setTab] = useState<'engines' | 'games' | 'books'>('engines');
   const [engine, setEngine] = useState<EngineId>('AUTO');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [live, setLive] = useState<{ engine: string; input: string; output: string } | null>(null);
@@ -221,7 +222,7 @@ export default function BNAEngine() {
         </header>
 
         <nav className="mt-6 flex justify-center gap-2" aria-label="الأقسام">
-          {([['engines', '⚡ المحركات'], ['games', '🎮 الألعاب']] as const).map(([id, label]) => (
+          {([['engines', '⚡ المحركات'], ['books', '📖 الكتب'], ['games', '🎮 الألعاب']] as const).map(([id, label]) => (
             <button
               key={id}
               type="button"
@@ -240,6 +241,8 @@ export default function BNAEngine() {
 
         {tab === 'games' ? (
           <Games />
+        ) : tab === 'books' ? (
+          <BookStudio />
         ) : (
           <>
 
