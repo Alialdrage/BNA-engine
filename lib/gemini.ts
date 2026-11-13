@@ -1,7 +1,9 @@
 // طبقة الاتصال بـ Gemini API. تُستخدم على الخادم فقط، والمفتاح لا يصل إلى المتصفح أبداً.
+import { sseData } from './sse';
+import type { ChatMessage } from './llm';
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const TIMEOUT_MS = 30000;
+const TIMEOUT_MS = 60000;
 
 export type GeminiModelKey = 'GEMINI4' | 'GEMINI38';
 
@@ -22,20 +24,29 @@ export function geminiModelId(key: GeminiModelKey): string {
   return custom && /^[\w.-]+$/.test(custom) ? custom : id;
 }
 
-export async function askGemini(
+export async function* streamGemini(
   key: GeminiModelKey,
   system: string,
   userText: string,
-): Promise<string> {
+  history: ChatMessage[] = [],
+): AsyncGenerator<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('مفتاح Gemini غير مضبوط');
   }
 
   const model = geminiModelId(key);
+  const contents = [
+    ...history.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    })),
+    { role: 'user', parts: [{ text: userText }] },
+  ];
+
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}/${model}:generateContent`, {
+    res = await fetch(`${BASE_URL}/${model}:streamGenerateContent?alt=sse`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -43,8 +54,8 @@ export async function askGemini(
       },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text: userText }] }],
-        generationConfig: { maxOutputTokens: 1500 },
+        contents,
+        generationConfig: { maxOutputTokens: 2000 },
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -56,16 +67,32 @@ export async function askGemini(
     throw new Error(`خدمة Gemini رجعت خطأ (${res.status})`);
   }
 
-  const data = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text = (data.candidates?.[0]?.content?.parts ?? [])
-    .map((p) => p.text ?? '')
-    .join('\n')
-    .trim();
-
-  if (!text) {
+  let produced = false;
+  for await (const data of sseData(res)) {
+    let evt: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    try {
+      evt = JSON.parse(data);
+    } catch {
+      continue;
+    }
+    const text = (evt.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('');
+    if (text) {
+      produced = true;
+      yield text;
+    }
+  }
+  if (!produced) {
     throw new Error('لم يصل رد من Gemini');
   }
-  return text;
+}
+
+export async function askGemini(
+  key: GeminiModelKey,
+  system: string,
+  userText: string,
+  history: ChatMessage[] = [],
+): Promise<string> {
+  let out = '';
+  for await (const chunk of streamGemini(key, system, userText, history)) out += chunk;
+  return out.trim();
 }
