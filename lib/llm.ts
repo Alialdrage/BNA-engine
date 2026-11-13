@@ -2,7 +2,13 @@
 import { sseData } from './sse';
 import { addSource, formatSources, type Source } from './sources';
 
-const API_URL = 'https://api.anthropic.com/v1/messages';
+const DEFAULT_BASE = 'https://api.anthropic.com';
+
+// يمكن تغيير العنوان (بوابة أو وكيل داخلي) من ANTHROPIC_BASE_URL
+function apiUrl(): string {
+  const base = (process.env.ANTHROPIC_BASE_URL || DEFAULT_BASE).replace(/\/+$/, '');
+  return `${base}/v1/messages`;
+}
 const DEFAULT_MODEL = 'claude-haiku-5-5';
 const TIMEOUT_MS = 60000;
 const LONG_TIMEOUT_MS = 110000; // التأليف الطويل والبحث
@@ -38,7 +44,7 @@ export async function* streamClaude(
 
   let res: Response;
   try {
-    res = await fetch(API_URL, {
+    res = await fetch(apiUrl(), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

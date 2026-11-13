@@ -125,3 +125,11 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---- طباعة الكتب ---- */
+.book-print { display: none; }
+@media print {
+  body > *:not(.book-print) { display: none !important; }
+  .book-print { display: block !important; }
+  html, body { background: #fff !important; }
+}
