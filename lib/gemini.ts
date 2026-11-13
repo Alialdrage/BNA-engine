@@ -1,6 +1,7 @@
 // طبقة الاتصال بـ Gemini API. تُستخدم على الخادم فقط، والمفتاح لا يصل إلى المتصفح أبداً.
 import { sseData } from './sse';
-import type { ChatMessage } from './llm';
+import { addSource, formatSources, type Source } from './sources';
+import type { ChatMessage, StreamOptions } from './llm';
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const TIMEOUT_MS = 60000;
@@ -29,6 +30,7 @@ export async function* streamGemini(
   system: string,
   userText: string,
   history: ChatMessage[] = [],
+  opts: StreamOptions = {},
 ): AsyncGenerator<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -55,7 +57,8 @@ export async function* streamGemini(
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents,
-        generationConfig: { maxOutputTokens: 2000 },
+        generationConfig: { maxOutputTokens: opts.maxTokens ?? 2000 },
+        ...(opts.webSearchMaxUses ? { tools: [{ google_search: {} }] } : {}),
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -68,13 +71,26 @@ export async function* streamGemini(
   }
 
   let produced = false;
+  const sources = new Map<string, Source>();
+  const queries: string[] = [];
   for await (const data of sseData(res)) {
-    let evt: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    let evt: {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+        groundingMetadata?: {
+          webSearchQueries?: string[];
+          groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+        };
+      }>;
+    };
     try {
       evt = JSON.parse(data);
     } catch {
       continue;
     }
+    const gm = evt.candidates?.[0]?.groundingMetadata;
+    for (const c of gm?.groundingChunks ?? []) addSource(sources, c.web?.uri, c.web?.title);
+    for (const q of gm?.webSearchQueries ?? []) if (typeof q === 'string') queries.push(q.slice(0, 120));
     const text = (evt.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('');
     if (text) {
       produced = true;
@@ -84,6 +100,7 @@ export async function* streamGemini(
   if (!produced) {
     throw new Error('لم يصل رد من Gemini');
   }
+  if (opts.webSearchMaxUses) yield formatSources(queries, [...sources.values()]);
 }
 
 export async function askGemini(
