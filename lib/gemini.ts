@@ -5,6 +5,7 @@ import type { ChatMessage, StreamOptions } from './llm';
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const TIMEOUT_MS = 60000;
+const LONG_TIMEOUT_MS = 110000; // التأليف الطويل والبحث
 
 export type GeminiModelKey = 'GEMINI4' | 'GEMINI38';
 
@@ -60,7 +61,7 @@ export async function* streamGemini(
         generationConfig: { maxOutputTokens: opts.maxTokens ?? 2000 },
         ...(opts.webSearchMaxUses ? { tools: [{ google_search: {} }] } : {}),
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout((opts.maxTokens ?? 0) > 3000 || opts.webSearchMaxUses ? LONG_TIMEOUT_MS : TIMEOUT_MS),
     });
   } catch {
     throw new Error('تعذر الوصول لخدمة Gemini، أو انتهت المهلة');

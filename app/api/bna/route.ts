@@ -7,7 +7,7 @@ import { checkRateLimit, clientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const DEFAULT_AI_LIMIT_PER_MINUTE = 10;
 

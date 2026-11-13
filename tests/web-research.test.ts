@@ -176,3 +176,17 @@ test('المحركات الجديدة: بدون مفتاح تعطي بدائل �
     assert.equal(usesWebSearch('DEEPANALYSIS'), false);
   });
 });
+
+test('التأليف والكتابة البحثية: تسجيل المحركات وحدود الاستهلاك والبدائل', async () => {
+  await withKey({ ANTHROPIC_API_KEY: undefined, GEMINI_API_KEY: undefined }, async () => {
+    const a = await runEngine('AUTHOR', 'اكتب قصة قصيرة عن بغداد');
+    assert.match(a.text, /مفتاح/);
+    const w = await runEngine('RESEARCHWRITER', 'مقال عن الطاقة الشمسية في العراق');
+    assert.match(w.text, /google\.com\/search\?q=/);
+  });
+  await withKey({ ANTHROPIC_API_KEY: 'k', GEMINI_API_KEY: undefined }, async () => {
+    assert.equal(usesWebSearch('RESEARCHWRITER'), true);
+    assert.equal(usesWebSearch('AUTHOR'), false);
+    assert.equal(callsPaidApi('AUTHOR', 'x'), true);
+  });
+});
