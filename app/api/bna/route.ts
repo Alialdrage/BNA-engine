@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
-import { MAX_INPUT_LENGTH, callsPaidApi, isEngineId, runEngine } from '@/lib/bna-engine';
+import {
+  MAX_INPUT_LENGTH, callsPaidApi, engineName, isEngineId, resolveEngine,
+  sanitizeHistory, streamEngine,
+} from '@/lib/bna-engine';
 import { checkRateLimit, clientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const DEFAULT_AI_LIMIT_PER_MINUTE = 10;
 
@@ -14,7 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'الطلب غير صالح' }, { status: 400 });
   }
 
-  const { engine, input } = (
+  const { engine, input, history, stream } = (
     typeof body === 'object' && body !== null ? body : {}
   ) as Record<string, unknown>;
 
@@ -31,8 +35,11 @@ export async function POST(request: Request) {
     );
   }
 
+  const text = input.trim();
+  const target = resolveEngine(engine, text);
+
   // حد الطلبات يطبق فقط على المحركات التي تستدعي واجهة ذكاء اصطناعي مدفوعة (Claude أو Gemini)
-  if (callsPaidApi(engine)) {
+  if (callsPaidApi(target, text)) {
     const limit = Number(process.env.AI_RATE_LIMIT_PER_MINUTE) || DEFAULT_AI_LIMIT_PER_MINUTE;
     const rl = checkRateLimit(`ai:${clientIp(request)}`, limit, 60_000);
     if (!rl.ok) {
@@ -43,11 +50,51 @@ export async function POST(request: Request) {
     }
   }
 
+  const label = engine === 'AUTO' ? `تلقائي ← ${engineName(target)}` : engineName(target);
+  const gen = streamEngine(target, text, sanitizeHistory(history));
+
+  // ننتظر أول قطعة قبل الرد، فإن فشلت الخدمة نرجع رمز خطأ حقيقياً بدل رد 200 فارغ
+  let first: IteratorResult<string>;
   try {
-    const result = await runEngine(engine, input);
-    return NextResponse.json({ result });
+    first = await gen.next();
   } catch (err) {
     const message = err instanceof Error ? err.message : 'حدث خطأ أثناء التحليل';
     return NextResponse.json({ error: message }, { status: 502 });
   }
+
+  if (stream !== true) {
+    let out = first.done ? '' : first.value;
+    try {
+      for await (const chunk of gen) out += chunk;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'حدث خطأ أثناء التحليل';
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+    return NextResponse.json({ result: out.trim(), engine: label });
+  }
+
+  const encoder = new TextEncoder();
+  const body$ = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        if (!first.done) controller.enqueue(encoder.encode(first.value));
+        for await (const chunk of gen) controller.enqueue(encoder.encode(chunk));
+      } catch {
+        controller.enqueue(encoder.encode('\n\n⚠️ انقطع الرد قبل أن يكتمل'));
+      }
+      controller.close();
+    },
+    async cancel() {
+      await gen.return(undefined);
+    },
+  });
+
+  return new Response(body$, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Accel-Buffering': 'no',
+      'X-BNA-Engine': encodeURIComponent(label),
+    },
+  });
 }
