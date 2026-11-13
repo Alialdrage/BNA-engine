@@ -5,6 +5,7 @@ import { addSource, formatSources, type Source } from './sources';
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const DEFAULT_MODEL = 'claude-haiku-5-5';
 const TIMEOUT_MS = 60000;
+const LONG_TIMEOUT_MS = 110000; // التأليف الطويل والبحث
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -58,7 +59,7 @@ export async function* streamClaude(
             }
           : {}),
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout((opts.maxTokens ?? 0) > 3000 || opts.webSearchMaxUses ? LONG_TIMEOUT_MS : TIMEOUT_MS),
     });
   } catch {
     throw new Error('تعذر الوصول لخدمة الذكاء الاصطناعي، أو انتهت المهلة');

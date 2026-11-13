@@ -12,6 +12,8 @@ export const ENGINES = [
   { id: 'WEBSEARCH', name: 'بحث ويب', icon: '🌐', group: 'ai' },
   { id: 'DEEPRESEARCH', name: 'بحث عميق', icon: '🔬', group: 'ai' },
   { id: 'DEEPANALYSIS', name: 'تحليل عميق', icon: '🧩', group: 'ai' },
+  { id: 'AUTHOR', name: 'تأليف', icon: '📚', group: 'ai' },
+  { id: 'RESEARCHWRITER', name: 'بحث وكتابة', icon: '🖋️', group: 'ai' },
   { id: 'IMAGE', name: 'صور', icon: '🎨', group: 'ai' },
   { id: 'VIDEO', name: 'فيديو', icon: '🎬', group: 'ai' },
   { id: 'GAMEMASTER', name: 'ألغاز', icon: '🎲', group: 'ai' },
