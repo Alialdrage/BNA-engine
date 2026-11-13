@@ -1,10 +1,61 @@
 'use client';
 
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import Games from '@/components/Games';
 import { ENGINES, MAX_INPUT_LENGTH, type EngineId } from '@/lib/engines';
 
 type ApiResponse = { result?: string; error?: string };
 type Turn = { id: number; engine: string; input: string; output: string };
+
+const IMG = /!\[([^\]]*)\]\((\/api\/image\?[^)\s]+)\)/g;
+
+// يعرض النص، ويحوّل روابط الصور الداخلية فقط إلى صور
+function Output({ text }: { text: string }) {
+  const parts: Array<string | { alt: string; src: string }> = [];
+  let last = 0;
+  for (const m of text.matchAll(IMG)) {
+    parts.push(text.slice(last, m.index));
+    parts.push({ alt: m[1], src: m[2] });
+    last = (m.index ?? 0) + m[0].length;
+  }
+  parts.push(text.slice(last));
+  return (
+    <div className="whitespace-pre-wrap leading-relaxed text-slate-100">
+      {parts.map((p, i) =>
+        typeof p === 'string' ? (
+          <Fragment key={i}>{p}</Fragment>
+        ) : (
+          <GeneratedImage key={i} alt={p.alt} src={p.src} />
+        ),
+      )}
+    </div>
+  );
+}
+
+function GeneratedImage({ alt, src }: { alt: string; src: string }) {
+  const [state, setState] = useState<'loading' | 'ok' | 'fail'>('loading');
+  return (
+    <span className="my-3 block">
+      {state === 'loading' && <span className="block text-sm text-cyan-200/70">⏳ جاري توليد الصورة (قد تستغرق نصف دقيقة)…</span>}
+      {state === 'fail' && (
+        <span className="block text-sm text-rose-300">تعذر توليد الصورة الآن، جرّب وصفاً آخر أو حاول لاحقاً.</span>
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        onLoad={() => setState('ok')}
+        onError={() => setState('fail')}
+        className={`max-h-[70vh] rounded-2xl border border-cyan-300/30 ${state === 'ok' ? '' : 'hidden'}`}
+      />
+      {state === 'ok' && (
+        <a href={src} download="bna-image" className="mt-2 inline-block text-xs font-bold text-cyan-300 hover:underline">
+          تحميل الصورة
+        </a>
+      )}
+    </span>
+  );
+}
 
 const STORAGE_KEY = 'bna-chat-v1';
 const MAX_TURNS = 30;
@@ -31,6 +82,7 @@ function trackPointer(e: MouseEvent<HTMLElement>) {
 
 export default function BNAEngine() {
   const [input, setInput] = useState('');
+  const [tab, setTab] = useState<'engines' | 'games'>('engines');
   const [engine, setEngine] = useState<EngineId>('AUTO');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [live, setLive] = useState<{ engine: string; input: string; output: string } | null>(null);
@@ -168,6 +220,29 @@ export default function BNAEngine() {
           </p>
         </header>
 
+        <nav className="mt-6 flex justify-center gap-2" aria-label="الأقسام">
+          {([['engines', '⚡ المحركات'], ['games', '🎮 الألعاب']] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={tab === id}
+              onClick={() => setTab(id)}
+              className={`rounded-full border px-5 py-2 text-sm font-bold transition ${
+                tab === id
+                  ? 'border-cyan-300/70 bg-gradient-to-r from-cyan-300 to-indigo-400 text-slate-950 shadow-[0_0_20px_rgba(34,211,238,0.5)]'
+                  : 'glass text-cyan-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {tab === 'games' ? (
+          <Games />
+        ) : (
+          <>
+
         {(['ai', 'local'] as const).map((group) => (
           <div key={group} className="mt-6">
             <h2 className="mb-2 text-xs font-bold tracking-wider text-cyan-200/70">
@@ -268,9 +343,7 @@ export default function BNAEngine() {
         {live && (
           <section aria-live="polite" className="glass fade-up mt-3 rounded-3xl p-6">
             <div className="mb-2 text-xs text-cyan-200/60">أنت: {live.input.slice(0, 120)}</div>
-            <div className="whitespace-pre-wrap leading-relaxed text-slate-100">
-              {live.output || <span className="text-cyan-200/60">…</span>}
-            </div>
+            {live.output ? <Output text={live.output} /> : <span className="text-cyan-200/60">…</span>}
           </section>
         )}
 
@@ -289,9 +362,11 @@ export default function BNAEngine() {
                 </button>
               </span>
             </div>
-            <div className="whitespace-pre-wrap leading-relaxed text-slate-100">{t.output}</div>
+            <Output text={t.output} />
           </section>
         ))}
+          </>
+        )}
       </div>
     </main>
   );
