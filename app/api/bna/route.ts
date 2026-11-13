@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import {
   MAX_INPUT_LENGTH, callsPaidApi, engineName, isEngineId, resolveEngine,
-  sanitizeHistory, streamEngine,
+  providerAvailableFor, sanitizeHistory, streamEngine, usesWebSearch,
 } from '@/lib/bna-engine';
 import { checkRateLimit, clientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const DEFAULT_AI_LIMIT_PER_MINUTE = 10;
 
@@ -45,6 +46,18 @@ export async function POST(request: Request) {
     if (!rl.ok) {
       return NextResponse.json(
         { error: `طلبات كثيرة، حاول بعد ${rl.retryAfterSec} ثانية` },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+      );
+    }
+  }
+
+  // البحث في الويب مكلف (لكل عملية بحث سعر)، فله حد ساعي إضافي
+  if (usesWebSearch(target) && providerAvailableFor(target)) {
+    const perHour = Number(process.env.WEB_RATE_LIMIT_PER_HOUR) || 20;
+    const rl = checkRateLimit(`web:${clientIp(request)}`, perHour, 3_600_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `وصلت حد البحث في الويب، حاول بعد ${Math.ceil(rl.retryAfterSec / 60)} دقيقة` },
         { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
       );
     }
