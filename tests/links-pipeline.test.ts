@@ -98,3 +98,29 @@ test('توجيه AUTO للبرمجة والصور', () => {
   assert.equal(resolveAuto('AUTO', 'اكتب برنامج بايثون يحسب المتوسط'), 'CODE');
   assert.equal(resolveAuto('AUTO', 'ارسم صورة قطة'), 'IMAGE');
 });
+
+import { writingCheck } from '../lib/writing';
+import { cleanStyle } from '../lib/bna-engine';
+
+test('فحص الكتابة يكشف العبارات الجاهزة والتكرار', async () => {
+  const out = writingCheck('في عالم اليوم لا شك أن التقنية جداً مهمة. التقنية تغير حياتنا. التقنية تسهل العمل. التقنية للجميع.').join('\n');
+  assert.match(out, /في عالم اليوم/);
+  assert.match(out, /جداً/);
+  assert.match(out, /مكررة/);
+  const r = await runAuto('WRITECHECK', 'نص قصير نظيف يتحدث عن البحر.');
+  assert.match(r.text, /متوسط طول الجملة/);
+});
+
+test('ملف الأسلوب يُنظَّف ويُقصّ', () => {
+  assert.equal(cleanStyle(42), '');
+  assert.equal(cleanStyle('"""x"""'), '"x"');
+  assert.equal(cleanStyle('a'.repeat(5000)).length, 1500);
+});
+
+test('محركات الكتابة الجديدة موجودة وتعمل بلا مفتاح', async () => {
+  for (const id of ['PROOF', 'CRITIC', 'TONE', 'OUTLINE', 'WRITECHECK']) {
+    assert.ok(ENGINES.some((e) => e.id === id), id);
+    const r = await runAuto(id as never, 'نص تجريبي');
+    assert.ok(r.text.length > 0);
+  }
+});

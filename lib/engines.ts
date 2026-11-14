@@ -13,6 +13,10 @@ export const ENGINES = [
   { id: 'WEBSEARCH', name: 'بحث ويب', icon: '🌐', group: 'ai' },
   { id: 'DEEPRESEARCH', name: 'بحث عميق', icon: '🔬', group: 'ai' },
   { id: 'DEEPANALYSIS', name: 'تحليل عميق', icon: '🧩', group: 'ai' },
+  { id: 'PROOF', name: 'تدقيق', icon: '🔎', group: 'ai' },
+  { id: 'CRITIC', name: 'محرر ناقد', icon: '🧐', group: 'ai' },
+  { id: 'TONE', name: 'نبرة', icon: '🎚️', group: 'ai' },
+  { id: 'OUTLINE', name: 'مخطط', icon: '🗂️', group: 'ai' },
   { id: 'AUTHOR', name: 'تأليف', icon: '📚', group: 'ai' },
   { id: 'RESEARCHWRITER', name: 'بحث وكتابة', icon: '🖋️', group: 'ai' },
   { id: 'IMAGE', name: 'صور', icon: '🎨', group: 'ai' },
@@ -28,6 +32,7 @@ export const ENGINES = [
   { id: 'DATE', name: 'تاريخ', icon: '📅', group: 'local' },
   { id: 'JSON', name: 'JSON', icon: '🧾', group: 'local' },
   { id: 'CODEC', name: 'ترميز', icon: '🔐', group: 'local' },
+  { id: 'WRITECHECK', name: 'فحص الكتابة', icon: '🩺', group: 'local' },
   { id: 'TEXT', name: 'تنظيف', icon: '🧹', group: 'local' },
   { id: 'PASSWORD', name: 'كلمة مرور', icon: '🔑', group: 'local' },
 ] as const;

@@ -94,6 +94,7 @@ export default function BNAEngine() {
   const [tab, setTab] = useState<'engines' | 'games' | 'books'>('engines');
   const [engine, setEngine] = useState<EngineId>('AUTO');
   const [menuOpen, setMenuOpen] = useState(false); // الأدوات والمهارات مخفية افتراضياً
+  const [style, setStyle] = useState('');
   const [chainMode, setChainMode] = useState(false);
   const [chain, setChain] = useState<EngineId[]>([]);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -105,7 +106,13 @@ export default function BNAEngine() {
 
   useEffect(() => {
     setTurns(loadTurns());
+    try { setStyle(localStorage.getItem('bna-style-v1') ?? ''); } catch { /* غير متاح */ }
   }, []);
+
+  function saveStyle(v: string) {
+    setStyle(v);
+    try { localStorage.setItem('bna-style-v1', v); } catch { /* غير متاح */ }
+  }
 
   function persist(next: Turn[]) {
     try {
@@ -154,7 +161,7 @@ export default function BNAEngine() {
       const res = await fetch('/api/bna', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: slash?.engine ?? effEngine, input: text, history, stream: true }),
+        body: JSON.stringify({ engine: slash?.engine ?? effEngine, input: text, history, stream: true, style }),
         signal: ctrl.signal,
       });
       if (!res.ok || !res.body) {
@@ -210,6 +217,7 @@ export default function BNAEngine() {
         setLive({ engine: tag, input: shownInput, output: '' });
         const { text, label } = await streamBnaFull(steps[i], current, {
           signal: ctrl.signal,
+          style,
           onChunk: (full) => setLive({ engine: tag, input: shownInput, output: full }),
         });
         if (!text.trim()) throw new Error(`${tag}: لم يصل ناتج`);
@@ -329,6 +337,18 @@ export default function BNAEngine() {
         {menuOpen && (
           <>
         <section className="glass mt-6 rounded-3xl p-4">
+          <details className="mb-3">
+            <summary className="cursor-pointer text-sm font-bold text-cyan-200">✍️ أسلوبي في الكتابة (يُطبَّق على الكتابة والتحرير)</summary>
+            <textarea
+              aria-label="وصف أسلوبي"
+              value={style}
+              maxLength={1500}
+              onChange={(e) => saveStyle(e.target.value)}
+              placeholder="مثال: نبرة ودية، جمل قصيرة، فصحى مبسطة، أتجنب المبالغة، أحب الأمثلة العراقية. ألصق هنا فقرة من كتابتك ليحاكيها."
+              className="mt-2 h-24 w-full rounded-xl border border-cyan-300/20 bg-slate-950/60 p-3 text-sm text-slate-100"
+            />
+            <p className="mt-1 text-xs text-cyan-200/60">يُحفظ في متصفحك فقط، ويُرسل مع طلبات الكتابة ({style.length}/1500).</p>
+          </details>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
