@@ -190,7 +190,8 @@ test('التوجيه التلقائي وحد الطلبات', async () => {
   });
   await withEnv({ ANTHROPIC_API_KEY: 'k', GEMINI_API_KEY: undefined }, async () => {
     assert.equal(resolveEngine('AUTO', '2+2'), 'CALC'); // الحساب لا يستهلك API
-    assert.equal(resolveEngine('AUTO', 'نص'), 'ML');
+    assert.equal(resolveEngine('AUTO', 'نص'), 'CHAT');
+    assert.equal(resolveEngine('AUTO', 'ن'.repeat(500)), 'ML');
     assert.equal(callsPaidApi('AUTO', '2+2'), false);
     assert.equal(callsPaidApi('TRANSLATE', 'hello'), true);
     assert.equal(callsPaidApi('GEMINI4', 'hello'), false); // لا مفتاح Gemini

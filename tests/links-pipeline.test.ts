@@ -79,3 +79,22 @@ test('اقتراحات الشرطة المائلة', () => {
   assert.deepEqual(slashSuggestions('/صور قطة'), []);
   assert.deepEqual(slashSuggestions('نص'), []);
 });
+
+import { smallTalkReply, looksLikeCodeRequest, looksLikeImageRequest } from '../lib/smalltalk';
+import { resolveEngine as resolveAuto, runEngine as runAuto } from '../lib/bna-engine';
+
+test('التحيات تُرد محلياً', async () => {
+  assert.match(smallTalkReply('السلام عليكم') ?? '', /وعليكم السلام/);
+  assert.match(smallTalkReply('هلا!') ?? '', /أهلاً/);
+  assert.equal(smallTalkReply('هلا اريد تحليل مبيعات الشهر الماضي بالتفصيل'), null);
+  const r = await runAuto('AUTO', 'مرحبا');
+  assert.equal(r.engine, 'CHAT');
+  assert.match(r.text, /أهلاً/);
+});
+
+test('توجيه AUTO للبرمجة والصور', () => {
+  assert.ok(looksLikeCodeRequest('اكتب برنامج بايثون يحسب المتوسط'));
+  assert.ok(looksLikeImageRequest('ارسم صورة قطة'));
+  assert.equal(resolveAuto('AUTO', 'اكتب برنامج بايثون يحسب المتوسط'), 'CODE');
+  assert.equal(resolveAuto('AUTO', 'ارسم صورة قطة'), 'IMAGE');
+});
