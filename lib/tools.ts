@@ -1,6 +1,7 @@
 // أدوات محلية يستدعيها Claude تلقائياً أثناء الرد (tool use). تعمل على الخادم فقط وبلا شبكة.
 import { calc, dateTool, jsonTool } from './skills';
 import { writingCheck } from './writing';
+import { externalToolDefs, loadExternalTools, runExternalTool } from './external-tools';
 
 export type ToolDef = { name: string; description: string; input_schema: Record<string, unknown> };
 
@@ -29,13 +30,19 @@ export const TOOLS: ToolDef[] = [
   },
 ];
 
+// سجل الأدوات: لإضافة أداة محلية جديدة أضف تعريفها في TOOLS وحالتها في runTool.
+// الأدوات الخارجية تأتي من EXTERNAL_TOOLS (انظر lib/external-tools.ts).
+export function allTools(): ToolDef[] {
+  return [...TOOLS, ...externalToolDefs()];
+}
+
 export const MAX_TOOL_ROUNDS = 4;
 
 export function toolsEnabled(): boolean {
   return (process.env.TOOLS ?? 'on').toLowerCase() !== 'off';
 }
 
-export function runTool(name: string, input: unknown): string {
+export async function runTool(name: string, input: unknown): Promise<string> {
   const text = typeof input === 'object' && input !== null && typeof (input as { input?: unknown }).input === 'string'
     ? (input as { input: string }).input.slice(0, 5000)
     : '';
@@ -46,7 +53,7 @@ export function runTool(name: string, input: unknown): string {
       case 'date_info': return dateTool(text).join('\n');
       case 'format_json': return jsonTool(text).join('\n');
       case 'writing_check': return writingCheck(text).join('\n');
-      default: return 'أداة غير معروفة';
+      default: return (await runExternalTool(name, text)) ?? 'أداة غير معروفة';
     }
   } catch {
     return 'تعذر تنفيذ الأداة';

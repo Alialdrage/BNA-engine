@@ -3,6 +3,7 @@ import {
   MAX_INPUT_LENGTH, callsPaidApi, engineName, isEngineId, resolveEngine,
   providerAvailableFor, cleanStyle, sanitizeHistory, streamEngine, usesWebSearch,
 } from '@/lib/bna-engine';
+import { normalizeSkill } from '@/lib/custom-skills';
 import { sanitizeAttachments } from '@/lib/attachments';
 import { checkRateLimit, clientIp } from '@/lib/rate-limit';
 
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'الطلب غير صالح' }, { status: 400 });
   }
 
-  const { engine, input, history, stream, style, attachments } = (
+  const { engine, input, history, stream, style, attachments, custom } = (
     typeof body === 'object' && body !== null ? body : {}
   ) as Record<string, unknown>;
 
@@ -37,6 +38,10 @@ export async function POST(request: Request) {
     );
   }
 
+  const customSkill = engine === 'CUSTOM' ? normalizeSkill(custom) : null;
+  if (engine === 'CUSTOM' && !customSkill) {
+    return NextResponse.json({ error: 'المهارة المخصصة غير صالحة (اسم وتعليمات 10 أحرف على الأقل)' }, { status: 400 });
+  }
   const atts = sanitizeAttachments(attachments);
   if ('error' in atts) {
     return NextResponse.json({ error: atts.error }, { status: 400 });
@@ -69,8 +74,8 @@ export async function POST(request: Request) {
     }
   }
 
-  const label = engine === 'AUTO' ? `تلقائي ← ${engineName(target)}` : engineName(target);
-  const gen = streamEngine(target, text, sanitizeHistory(history), cleanStyle(style), atts);
+  const label = customSkill && target === 'CUSTOM' ? `مهارتي: ${customSkill.name}` : engine === 'AUTO' ? `تلقائي ← ${engineName(target)}` : engineName(target);
+  const gen = streamEngine(target, text, sanitizeHistory(history), cleanStyle(style), atts, customSkill ?? undefined);
 
   // ننتظر أول قطعة قبل الرد، فإن فشلت الخدمة نرجع رمز خطأ حقيقياً بدل رد 200 فارغ
   let first: IteratorResult<string>;

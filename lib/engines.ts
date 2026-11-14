@@ -8,6 +8,7 @@ export const ENGINES = [
   { id: 'GEMINI4', name: 'Gemini 4', icon: '💎', group: 'ai' },
   { id: 'GEMINI38', name: 'Gemini 3.8', icon: '✨', group: 'ai' },
   { id: 'TRANSLATE', name: 'ترجمة', icon: '🌍', group: 'ai' },
+  { id: 'BUILDER', name: 'باني مشاريع', icon: '🏗️', group: 'ai' },
   { id: 'CODE', name: 'مبرمج', icon: '👨‍💻', group: 'ai' },
   { id: 'WRITER', name: 'كاتب', icon: '✍️', group: 'ai' },
   { id: 'WEBSEARCH', name: 'بحث ويب', icon: '🌐', group: 'ai' },
@@ -38,10 +39,11 @@ export const ENGINES = [
   { id: 'PASSWORD', name: 'كلمة مرور', icon: '🔑', group: 'local' },
 ] as const;
 
-export type EngineId = (typeof ENGINES)[number]['id'];
+// CUSTOM: مهارة مخصصة يعرّفها المستخدم (لا تظهر في القائمة الثابتة)
+export type EngineId = (typeof ENGINES)[number]['id'] | 'CUSTOM';
 export type ConcreteEngine = Exclude<EngineId, 'AUTO'>;
 
-export const ENGINE_IDS = ENGINES.map((e) => e.id) as EngineId[];
+export const ENGINE_IDS = [...ENGINES.map((e) => e.id), 'CUSTOM'] as EngineId[];
 
 export const MAX_INPUT_LENGTH = 20000;
 

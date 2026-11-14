@@ -33,3 +33,13 @@ export function looksLikeCodeRequest(text: string): boolean {
 export function looksLikeImageRequest(text: string): boolean {
   return /(ارسم|رسم|ولد|ولّد|صمم|صمّم|اعمل|سوي|اريد|أريد|انشئ|أنشئ)\s.{0,20}(صوره|صورة|لوحه|لوحة|شعار|لوغو|رسمه|رسمة)|^(صورة|صوره)\s|(draw|generate|create|make)\s.{0,20}(image|picture|logo|photo)/i.test(text);
 }
+
+// طلب مشروع كامل: تطبيق/APK/ZIP/موقع كامل
+export function looksLikeBuildRequest(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    /\b(apk|zip)\b|اندرويد|أندرويد|android|ملف مضغوط|مشروع كامل|مشروع متكامل/.test(t) ||
+    /(ابن[يِ]|ابني|انشئ|أنشئ|اعمل|سوي|اصنع|صمم|صمّم|اريد|أريد)\s.{0,25}(تطبيق|موقع|لعبة|مشروع)/.test(t) ||
+    /(build|create|make)\s.{0,25}(app|website|web app|project|game)/.test(t)
+  );
+}

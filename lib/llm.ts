@@ -1,7 +1,7 @@
 // طبقة الاتصال بـ Claude API. تُستخدم على الخادم فقط، والمفتاح لا يصل إلى المتصفح أبداً.
 import { sseData } from './sse';
 import type { Attachment } from './attachments';
-import { MAX_TOOL_ROUNDS, TOOLS, runTool, toolsEnabled } from './tools';
+import { MAX_TOOL_ROUNDS, allTools, runTool, toolsEnabled } from './tools';
 import { addSource, formatSources, type Source } from './sources';
 
 const DEFAULT_BASE = 'https://api.anthropic.com';
@@ -100,7 +100,7 @@ export async function* streamClaude(
           ...(opts.webSearchMaxUses
             ? { tools: [{ type: webSearchToolType(), name: 'web_search', max_uses: opts.webSearchMaxUses }] }
             : useTools && !lastRound
-              ? { tools: TOOLS }
+              ? { tools: allTools() }
               : {}),
         }),
         signal: AbortSignal.timeout(Math.max(5000, deadline - Date.now())),
@@ -196,10 +196,12 @@ export async function* streamClaude(
     });
     messages.push({
       role: 'user',
-      content: calls.map((c) => {
-        if (!usedTools.includes(c.name)) usedTools.push(c.name);
-        return { type: 'tool_result', tool_use_id: c.id, content: runTool(c.name, c.input) };
-      }),
+      content: await Promise.all(
+        calls.map(async (c) => {
+          if (!usedTools.includes(c.name)) usedTools.push(c.name);
+          return { type: 'tool_result', tool_use_id: c.id, content: await runTool(c.name, c.input) };
+        }),
+      ),
     });
   }
   if (!produced) {
