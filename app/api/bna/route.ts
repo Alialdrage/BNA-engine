@@ -62,6 +62,18 @@ export async function POST(request: Request) {
     }
   }
 
+  // فحص المنافذ يصدر اتصالات خارجية: حد صارم لكل عنوان
+  if (target === 'PORTSCAN') {
+    const perHour = Number(process.env.SCAN_RATE_LIMIT_PER_HOUR) || 6;
+    const rl = checkRateLimit(`scan:${clientIp(request)}`, perHour, 3_600_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `وصلت حد الفحص، حاول بعد ${Math.ceil(rl.retryAfterSec / 60)} دقيقة` },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+      );
+    }
+  }
+
   // البحث في الويب مكلف (لكل عملية بحث سعر)، فله حد ساعي إضافي
   if (usesWebSearch(target) && providerAvailableFor(target)) {
     const perHour = Number(process.env.WEB_RATE_LIMIT_PER_HOUR) || 20;

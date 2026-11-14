@@ -38,6 +38,7 @@ export const ENGINES = [
   { id: 'DATE', name: 'تاريخ', icon: '📅', group: 'local' },
   { id: 'JSON', name: 'JSON', icon: '🧾', group: 'local' },
   { id: 'CODEC', name: 'ترميز', icon: '🔐', group: 'local' },
+  { id: 'PORTSCAN', name: 'ماسح منافذ', icon: '🔭', group: 'local' },
   { id: 'JWTDECODE', name: 'فحص JWT', icon: '🪪', group: 'local' },
   { id: 'HASHID', name: 'تعريف هاش', icon: '#️⃣', group: 'local' },
   { id: 'SECHEADERS', name: 'ترويسات أمنية', icon: '🧱', group: 'local' },

@@ -105,3 +105,58 @@ test('محرك الاختراق الأخلاقي يحمل قيود التفوي�
     delete process.env.ANTHROPIC_API_KEY;
   }
 });
+
+import { createServer } from 'node:net';
+import { isAllowed, parseScanInput, portScan, tcpConnect, DEFAULT_PORTS } from '../lib/portscan';
+
+test('فاحص المنافذ: تحليل المدخلات والقائمة المسموحة', () => {
+  assert.deepEqual(parseScanInput('Example.com'), { host: 'example.com', ports: DEFAULT_PORTS });
+  assert.deepEqual(parseScanInput('https://example.com:8443/x 80, 443,20-22'), { host: 'example.com', ports: [20, 21, 22, 80, 443] });
+  assert.ok('error' in parseScanInput('example.com 1-65535'));
+  assert.ok('error' in parseScanInput('example.com 0-5'));
+  assert.ok('error' in parseScanInput('example.com abc'));
+  assert.ok('error' in parseScanInput('bad host!'));
+  assert.ok('error' in parseScanInput(''));
+  const allow = 'example.com, *.corp.test ,203.0.113.0/24, 10.0.0.0/8';
+  assert.equal(isAllowed('example.com', allow), true);
+  assert.equal(isAllowed('a.corp.test', allow), true);
+  assert.equal(isAllowed('corp.test', allow), false);
+  assert.equal(isAllowed('evilexample.com', allow), false);
+  assert.equal(isAllowed('203.0.113.77', allow), true);
+  assert.equal(isAllowed('203.0.114.1', allow), false);
+  assert.equal(isAllowed('10.1.2.3', allow), false, 'نطاقات أوسع من /16 مرفوضة');
+  assert.equal(isAllowed('example.com', ''), false);
+});
+
+test('فاحص المنافذ: معطّل بلا قائمة، يرفض غير المصرّح، ويفحص المسموح', async () => {
+  assert.match((await portScan('example.com', { allow: '' }))[0], /معطّل/);
+  assert.match((await portScan('other.com', { allow: 'example.com' }))[0], /ليس في قائمة/);
+  const calls: number[] = [];
+  const out = (
+    await portScan('example.com 22,80,3389,9999', {
+      allow: 'example.com',
+      resolve: async () => ['93.184.216.34'],
+      connectFn: async (_ip, port) => { calls.push(port); return port === 22 || port === 3389 ? 'open' : port === 80 ? 'closed' : 'filtered'; },
+    })
+  ).join('\n');
+  assert.deepEqual(calls.sort((a, b) => a - b), [22, 80, 3389, 9999]);
+  assert.match(out, /22\/SSH، 3389\/RDP/);
+  assert.match(out, /RDP مكشوف/);
+  assert.match(out, /مغلقة: 1.*بلا رد[^\n]*: 1/);
+  // الهدف المسموح لكنه يُحلَّل إلى عنوان داخلي (حماية من SSRF/إعادة ربط DNS)
+  let touched = false;
+  const priv = await portScan('example.com 80', {
+    allow: 'example.com', resolve: async () => ['169.254.169.254'], connectFn: async () => { touched = true; return 'open'; },
+  });
+  assert.match(priv[0], /داخلي/);
+  assert.equal(touched, false);
+});
+
+test('tcpConnect يميّز المفتوح من المغلق', async () => {
+  const srv = createServer((s) => s.destroy());
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+  const port = (srv.address() as { port: number }).port;
+  assert.equal(await tcpConnect('127.0.0.1', port, 1000), 'open');
+  await new Promise<void>((r) => srv.close(() => r()));
+  assert.equal(await tcpConnect('127.0.0.1', port, 1000), 'closed');
+});
