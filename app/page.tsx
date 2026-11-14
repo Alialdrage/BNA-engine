@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEv
 import BookStudio from '@/components/BookStudio';
 import Games from '@/components/Games';
 import { streamBnaFull } from '@/lib/client-api';
-import { ENGINES, MAX_INPUT_LENGTH, type EngineId } from '@/lib/engines';
+import { ENGINES, MAX_INPUT_LENGTH, parseSlash, slashSuggestions, type EngineId } from '@/lib/engines';
 import { hostOf, linkify } from '@/lib/linkify';
 import { MAX_STEPS, PRESETS, addStep, nextInput } from '@/lib/pipeline';
 
@@ -93,6 +93,7 @@ export default function BNAEngine() {
   const [input, setInput] = useState('');
   const [tab, setTab] = useState<'engines' | 'games' | 'books'>('engines');
   const [engine, setEngine] = useState<EngineId>('AUTO');
+  const [menuOpen, setMenuOpen] = useState(false); // الأدوات والمهارات مخفية افتراضياً
   const [chainMode, setChainMode] = useState(false);
   const [chain, setChain] = useState<EngineId[]>([]);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -117,13 +118,22 @@ export default function BNAEngine() {
     }
   }
 
+  // عند إخفاء القائمة نعمل بالوضع التلقائي دائماً، فلا تؤثر اختيارات مخفية على الطلب
+  const effEngine: EngineId = menuOpen ? engine : 'AUTO';
+  const effChain = menuOpen && chainMode;
+  const suggestions = slashSuggestions(input);
   const canRun =
-    !loading && input.trim().length > 0 && input.length <= MAX_INPUT_LENGTH && (!chainMode || chain.length >= 2);
+    !loading && input.trim().length > 0 && input.length <= MAX_INPUT_LENGTH && (!effChain || chain.length >= 2);
   const nearLimit = input.length > MAX_INPUT_LENGTH * 0.9;
 
   async function runBNA() {
     if (!canRun) return;
-    const text = input.trim();
+    const slash = parseSlash(input);
+    if (slash && !slash.text) {
+      setError('اكتب طلبك بعد اسم المهارة، مثل: /صور قطة تلبس نظارات');
+      return;
+    }
+    const text = slash ? slash.text : input.trim();
     // آخر المحادثات ترسل للخادم كذاكرة (تُستخدم لمحركات الذكاء الاصطناعي فقط)
     const history = turns
       .slice(0, HISTORY_TURNS)
@@ -144,7 +154,7 @@ export default function BNAEngine() {
       const res = await fetch('/api/bna', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine, input: text, history, stream: true }),
+        body: JSON.stringify({ engine: slash?.engine ?? effEngine, input: text, history, stream: true }),
         signal: ctrl.signal,
       });
       if (!res.ok || !res.body) {
@@ -224,7 +234,7 @@ export default function BNAEngine() {
     }
   }
 
-  const run = () => void (chainMode ? runChain() : runBNA());
+  const run = () => void (effChain ? runChain() : runBNA());
 
   function clearChat() {
     setTurns([]);
@@ -275,7 +285,22 @@ export default function BNAEngine() {
           </p>
         </header>
 
-        <nav className="mt-6 flex justify-center gap-2" aria-label="الأقسام">
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            aria-expanded={menuOpen}
+            onClick={() => {
+              if (menuOpen) setTab('engines');
+              setMenuOpen((v) => !v);
+            }}
+            className="rounded-full border border-cyan-300/25 px-4 py-1.5 text-xs font-bold text-cyan-200/80 transition hover:border-cyan-300 hover:text-white"
+          >
+            {menuOpen ? '✕ إخفاء الأدوات' : '☰ الأدوات والمهارات'}
+          </button>
+        </div>
+
+        {menuOpen && (
+        <nav className="mt-4 flex justify-center gap-2" aria-label="الأقسام">
           {([['engines', '⚡ المحركات'], ['books', '📖 الكتب'], ['games', '🎮 الألعاب']] as const).map(([id, label]) => (
             <button
               key={id}
@@ -292,6 +317,7 @@ export default function BNAEngine() {
             </button>
           ))}
         </nav>
+        )}
 
         {tab === 'games' ? (
           <Games />
@@ -300,6 +326,8 @@ export default function BNAEngine() {
         ) : (
           <>
 
+        {menuOpen && (
+          <>
         <section className="glass mt-6 rounded-3xl p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <button
@@ -392,6 +420,9 @@ export default function BNAEngine() {
           </div>
         ))}
 
+          </>
+        )}
+
         <section
           onMouseMove={trackPointer}
           className="glass spotlight mt-6 rounded-3xl p-5 transition duration-300 focus-within:shadow-[0_0_50px_rgba(34,211,238,0.3)]"
@@ -402,9 +433,26 @@ export default function BNAEngine() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
             maxLength={MAX_INPUT_LENGTH}
-            placeholder="اكتب شي..."
+            placeholder="اكتب طلبك هنا… (اكتب / لاختيار مهارة، مثل /صور أو /ترجمة)"
             className="h-40 w-full rounded-2xl border border-cyan-300/20 bg-slate-950/60 p-4 text-slate-100 outline-none transition duration-300 placeholder:text-cyan-200/40 focus:border-cyan-300 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.25),0_0_30px_rgba(34,211,238,0.35)]"
           />
+
+          {suggestions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2" role="listbox" aria-label="مهارات مقترحة">
+              {suggestions.map((sg) => (
+                <button
+                  key={sg.id}
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  onClick={() => setInput(`/${sg.name} `)}
+                  className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-100 hover:border-cyan-300"
+                >
+                  {sg.icon} {sg.name}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="mt-2 flex items-center justify-between text-xs">
             <span className="text-cyan-200/50">Ctrl + Enter للتشغيل</span>
@@ -424,7 +472,7 @@ export default function BNAEngine() {
                 : 'bg-gradient-to-r from-cyan-300 via-sky-400 to-indigo-500 shadow-[0_0_30px_rgba(34,211,238,0.5)] hover:shadow-[0_0_50px_rgba(34,211,238,0.8)] disabled:shadow-none'
             } ${!canRun && !loading ? 'opacity-40' : ''}`}
           >
-            {loading ? 'جاري الرد...' : chainMode ? `شغّل السلسلة (${chain.length}) 🔗` : 'شغّل BNA 🔵'}
+            {loading ? 'جاري الرد...' : effChain ? `شغّل السلسلة (${chain.length}) 🔗` : 'شغّل BNA 🔵'}
           </button>
           {loading && (
             <button
