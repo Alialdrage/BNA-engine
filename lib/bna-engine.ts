@@ -1,6 +1,7 @@
 import { llmAvailable, streamClaude, type ChatMessage, type StreamOptions } from './llm';
 import { geminiAvailable, streamGemini, type GeminiModelKey } from './gemini';
 import type { Attachment } from './attachments';
+import { portScan } from './portscan';
 import { cvssTool, hashId, headerCheck, jwtDecode, logScan } from './security';
 import { writingCheck } from './writing';
 import { freeLlmAvailable, streamFree } from './free-llm';
@@ -404,6 +405,11 @@ export async function* streamEngine(
     prompt = prompt.slice(0, MAX_IMAGE_PROMPT);
     const url = localImageUrl({ prompt, seed: Math.floor(Math.random() * 1_000_000), ...sizeFromText(text) });
     yield `الوصف المستخدم: ${prompt}\n![${prompt.slice(0, 80).replace(/[\[\]()\n]/g, ' ')}](${url})`;
+    return;
+  }
+
+  if (target === 'PORTSCAN') {
+    yield (await portScan(text)).join('\n');
     return;
   }
 
