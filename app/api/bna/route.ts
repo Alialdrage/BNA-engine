@@ -3,6 +3,7 @@ import {
   MAX_INPUT_LENGTH, callsPaidApi, engineName, isEngineId, resolveEngine,
   providerAvailableFor, cleanStyle, sanitizeHistory, streamEngine, usesWebSearch,
 } from '@/lib/bna-engine';
+import { sanitizeAttachments } from '@/lib/attachments';
 import { checkRateLimit, clientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'الطلب غير صالح' }, { status: 400 });
   }
 
-  const { engine, input, history, stream, style } = (
+  const { engine, input, history, stream, style, attachments } = (
     typeof body === 'object' && body !== null ? body : {}
   ) as Record<string, unknown>;
 
@@ -36,8 +37,13 @@ export async function POST(request: Request) {
     );
   }
 
+  const atts = sanitizeAttachments(attachments);
+  if ('error' in atts) {
+    return NextResponse.json({ error: atts.error }, { status: 400 });
+  }
   const text = input.trim();
-  const target = resolveEngine(engine, text);
+  // وجود مرفقات يوجّه الطلب لمحرك الرؤية
+  const target = atts.length ? ('VISION' as const) : resolveEngine(engine, text);
 
   // حد الطلبات يطبق فقط على المحركات التي تستدعي واجهة ذكاء اصطناعي مدفوعة (Claude أو Gemini)
   if (callsPaidApi(target, text)) {
@@ -64,7 +70,7 @@ export async function POST(request: Request) {
   }
 
   const label = engine === 'AUTO' ? `تلقائي ← ${engineName(target)}` : engineName(target);
-  const gen = streamEngine(target, text, sanitizeHistory(history), cleanStyle(style));
+  const gen = streamEngine(target, text, sanitizeHistory(history), cleanStyle(style), atts);
 
   // ننتظر أول قطعة قبل الرد، فإن فشلت الخدمة نرجع رمز خطأ حقيقياً بدل رد 200 فارغ
   let first: IteratorResult<string>;

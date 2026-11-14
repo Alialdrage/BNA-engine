@@ -19,6 +19,7 @@ export const ENGINES = [
   { id: 'OUTLINE', name: 'مخطط', icon: '🗂️', group: 'ai' },
   { id: 'AUTHOR', name: 'تأليف', icon: '📚', group: 'ai' },
   { id: 'RESEARCHWRITER', name: 'بحث وكتابة', icon: '🖋️', group: 'ai' },
+  { id: 'VISION', name: 'رؤية وملفات', icon: '👁️', group: 'ai' },
   { id: 'IMAGE', name: 'صور', icon: '🎨', group: 'ai' },
   { id: 'VIDEO', name: 'فيديو', icon: '🎬', group: 'ai' },
   { id: 'GAMEMASTER', name: 'ألغاز', icon: '🎲', group: 'ai' },
