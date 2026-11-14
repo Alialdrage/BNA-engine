@@ -15,7 +15,8 @@ export function addSource(map: Map<string, Source>, url: unknown, title: unknown
   const safe = safeUrl(url);
   if (!safe || map.has(safe)) return;
   const t = typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : new URL(safe).hostname;
-  map.set(safe, { url: safe, title: t.replace(/[\n\r]+/g, ' ') });
+  // الأقواس المربعة في العنوان تكسر صيغة الرابط [عنوان](رابط)، فنستبدلها
+  map.set(safe, { url: safe, title: t.replace(/[\n\r]+/g, ' ').replace(/\[/g, '(').replace(/\]/g, ')') });
 }
 
 export function formatSources(queries: string[], sources: Source[], limit = 10): string {
@@ -25,9 +26,15 @@ export function formatSources(queries: string[], sources: Source[], limit = 10):
   }
   if (sources.length) {
     lines.push('\nالمصادر:');
-    sources.slice(0, limit).forEach((s, i) => lines.push(`${i + 1}. ${s.title}\n   ${s.url}`));
+    sources.slice(0, limit).forEach((s, i) => lines.push(`${i + 1}. [${s.title}](${s.url.replace(/\(/g, '%28').replace(/\)/g, '%29')})`));
   } else if (queries.length) {
     lines.push('\nلم تُرجع الخدمة مصادر قابلة للعرض.');
   }
   return lines.join('\n');
+}
+
+// يحذف قسم الاستعلامات والمصادر من نص الرد (قبل تمريره كمدخل لمهارة أخرى)
+export function stripSources(text: string): string {
+  const i = text.search(/\n+استعلامات البحث:|\n+المصادر:/);
+  return (i >= 0 ? text.slice(0, i) : text).trim();
 }

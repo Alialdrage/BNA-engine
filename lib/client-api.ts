@@ -4,6 +4,15 @@ export async function streamBna(
   input: string,
   opts: { signal?: AbortSignal; onChunk?: (full: string) => void } = {},
 ): Promise<string> {
+  return (await streamBnaFull(engine, input, opts)).text;
+}
+
+// نفس الدالة السابقة لكنها ترجع أيضاً اسم المحرك الذي نفّذ الطلب
+export async function streamBnaFull(
+  engine: string,
+  input: string,
+  opts: { signal?: AbortSignal; onChunk?: (full: string) => void } = {},
+): Promise<{ text: string; label: string }> {
   const res = await fetch('/api/bna', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -14,6 +23,7 @@ export async function streamBna(
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? 'تعذر تنفيذ الطلب');
   }
+  const label = decodeURIComponent(res.headers.get('X-BNA-Engine') ?? '');
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let out = '';
@@ -25,5 +35,5 @@ export async function streamBna(
   }
   out += decoder.decode();
   opts.onChunk?.(out);
-  return out;
+  return { text: out, label };
 }

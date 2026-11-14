@@ -3,32 +3,40 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import BookStudio from '@/components/BookStudio';
 import Games from '@/components/Games';
+import { streamBnaFull } from '@/lib/client-api';
 import { ENGINES, MAX_INPUT_LENGTH, type EngineId } from '@/lib/engines';
+import { hostOf, linkify } from '@/lib/linkify';
+import { MAX_STEPS, PRESETS, addStep, nextInput } from '@/lib/pipeline';
 
 type ApiResponse = { result?: string; error?: string };
 type Turn = { id: number; engine: string; input: string; output: string };
 
-const IMG = /!\[([^\]]*)\]\((\/api\/image\?[^)\s]+)\)/g;
-
-// يعرض النص، ويحوّل روابط الصور الداخلية فقط إلى صور
+// يعرض النص، ويحوّل الصور الداخلية إلى صور والروابط (http/https) إلى روابط حيّة تُفتح في تبويب جديد
 function Output({ text }: { text: string }) {
-  const parts: Array<string | { alt: string; src: string }> = [];
-  let last = 0;
-  for (const m of text.matchAll(IMG)) {
-    parts.push(text.slice(last, m.index));
-    parts.push({ alt: m[1], src: m[2] });
-    last = (m.index ?? 0) + m[0].length;
-  }
-  parts.push(text.slice(last));
   return (
-    <div className="whitespace-pre-wrap leading-relaxed text-slate-100">
-      {parts.map((p, i) =>
-        typeof p === 'string' ? (
-          <Fragment key={i}>{p}</Fragment>
-        ) : (
-          <GeneratedImage key={i} alt={p.alt} src={p.src} />
-        ),
-      )}
+    <div className="whitespace-pre-wrap break-words leading-relaxed text-slate-100">
+      {linkify(text).map((p, i) => {
+        if (p.t === 'text') return <Fragment key={i}>{p.text}</Fragment>;
+        if (p.t === 'image') return <GeneratedImage key={i} alt={p.alt} src={p.src} />;
+        const host = hostOf(p.url);
+        return (
+          <Fragment key={i}>
+            <a
+              href={p.url}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              className="break-all font-bold text-cyan-300 underline decoration-cyan-300/40 underline-offset-4 transition hover:text-white hover:decoration-white"
+            >
+              {p.label}
+            </a>
+            {host && p.label !== p.url && !p.label.includes(host) && (
+              <span dir="ltr" className="mx-1 inline-block text-xs text-cyan-200/50">
+                {host} ↗
+              </span>
+            )}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -85,6 +93,8 @@ export default function BNAEngine() {
   const [input, setInput] = useState('');
   const [tab, setTab] = useState<'engines' | 'games' | 'books'>('engines');
   const [engine, setEngine] = useState<EngineId>('AUTO');
+  const [chainMode, setChainMode] = useState(false);
+  const [chain, setChain] = useState<EngineId[]>([]);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [live, setLive] = useState<{ engine: string; input: string; output: string } | null>(null);
   const [error, setError] = useState('');
@@ -107,7 +117,8 @@ export default function BNAEngine() {
     }
   }
 
-  const canRun = !loading && input.trim().length > 0 && input.length <= MAX_INPUT_LENGTH;
+  const canRun =
+    !loading && input.trim().length > 0 && input.length <= MAX_INPUT_LENGTH && (!chainMode || chain.length >= 2);
   const nearLimit = input.length > MAX_INPUT_LENGTH * 0.9;
 
   async function runBNA() {
@@ -172,6 +183,49 @@ export default function BNAEngine() {
     }
   }
 
+  // دمج المهارات: ناتج كل خطوة يصبح مدخل التي بعدها
+  async function runChain() {
+    if (!canRun) return;
+    const startInput = input.trim();
+    const steps = [...chain];
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(true);
+    setError('');
+    let current = startInput;
+    try {
+      for (let i = 0; i < steps.length; i++) {
+        const tag = `الخطوة ${i + 1}/${steps.length}`;
+        const shownInput = i === 0 ? startInput : '↳ ناتج الخطوة السابقة';
+        setLive({ engine: tag, input: shownInput, output: '' });
+        const { text, label } = await streamBnaFull(steps[i], current, {
+          signal: ctrl.signal,
+          onChunk: (full) => setLive({ engine: tag, input: shownInput, output: full }),
+        });
+        if (!text.trim()) throw new Error(`${tag}: لم يصل ناتج`);
+        const turn: Turn = { id: Date.now() + i, engine: `${i + 1}/${steps.length} · ${label}`, input: shownInput, output: text.trim() };
+        setTurns((prev) => {
+          const next = [turn, ...prev].slice(0, MAX_TURNS);
+          persist(next);
+          return next;
+        });
+        current = nextInput(text);
+        if (!current && i < steps.length - 1) throw new Error(`${tag}: الناتج فارغ، توقفت السلسلة`);
+      }
+      setInput('');
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        setError(err instanceof Error ? err.message : 'تعذر تنفيذ السلسلة');
+      }
+    } finally {
+      setLive(null);
+      setLoading(false);
+      abortRef.current = null;
+    }
+  }
+
+  const run = () => void (chainMode ? runChain() : runBNA());
+
   function clearChat() {
     setTurns([]);
     persist([]);
@@ -191,7 +245,7 @@ export default function BNAEngine() {
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
-      void runBNA();
+      run();
     }
   }
 
@@ -246,6 +300,66 @@ export default function BNAEngine() {
         ) : (
           <>
 
+        <section className="glass mt-6 rounded-3xl p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              aria-pressed={chainMode}
+              onClick={() => setChainMode((v) => !v)}
+              className={`rounded-full border px-4 py-1.5 text-sm font-bold transition ${
+                chainMode ? 'border-cyan-300 bg-cyan-300/20 text-white' : 'border-cyan-300/30 text-cyan-200 hover:border-cyan-300'
+              }`}
+            >
+              🔗 دمج المهارات {chainMode ? '(مفعّل)' : ''}
+            </button>
+            {chainMode && (
+              <select
+                aria-label="سلاسل جاهزة"
+                className="rounded-xl border border-cyan-300/20 bg-slate-950/60 px-3 py-1.5 text-sm text-slate-100"
+                value=""
+                onChange={(e) => {
+                  const p = PRESETS.find((x) => x.id === e.target.value);
+                  if (p) setChain(p.steps);
+                }}
+              >
+                <option value="">سلاسل جاهزة…</option>
+                {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
+          </div>
+          {chainMode ? (
+            <div className="mt-3">
+              <p className="text-xs text-cyan-200/70">
+                اضغط على المهارات بالترتيب (حتى {MAX_STEPS})، وناتج كل واحدة يدخل التي بعدها. تحتاج خطوتين على الأقل.
+              </p>
+              <ol className="mt-2 flex flex-wrap items-center gap-2" aria-label="خطوات السلسلة">
+                {chain.length === 0 && <li className="text-sm text-cyan-200/50">لم تختر شيئاً بعد</li>}
+                {chain.map((id, i) => {
+                  const e = ENGINES.find((x) => x.id === id)!;
+                  return (
+                    <li key={`${id}-${i}`} className="flex items-center gap-1">
+                      {i > 0 && <span className="text-cyan-300">←</span>}
+                      <button
+                        type="button"
+                        title="إزالة الخطوة"
+                        onClick={() => setChain((c) => c.filter((_, j) => j !== i))}
+                        className="rounded-full border border-cyan-300/40 bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-100 hover:border-rose-300 hover:text-rose-200"
+                      >
+                        {i + 1}. {e.icon} {e.name} ✕
+                      </button>
+                    </li>
+                  );
+                })}
+                {chain.length > 0 && (
+                  <li><button type="button" onClick={() => setChain([])} className="text-xs text-rose-300 hover:underline">مسح</button></li>
+                )}
+              </ol>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-cyan-200/60">فعّل الدمج لتوصيل عدة مهارات: مثلاً ابحث ← لخّص ← ترجم.</p>
+          )}
+        </section>
+
         {(['ai', 'local'] as const).map((group) => (
           <div key={group} className="mt-6">
             <h2 className="mb-2 text-xs font-bold tracking-wider text-cyan-200/70">
@@ -253,13 +367,13 @@ export default function BNAEngine() {
             </h2>
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8">
               {ENGINES.filter((e) => e.group === group).map((e) => {
-                const active = engine === e.id;
+                const active = chainMode ? chain.includes(e.id) : engine === e.id;
                 return (
                   <button
                     key={e.id}
                     type="button"
                     aria-pressed={active}
-                    onClick={() => setEngine(e.id)}
+                    onClick={() => (chainMode ? setChain((c) => addStep(c, e.id)) : setEngine(e.id))}
                     onMouseMove={trackPointer}
                     className={`spotlight group rounded-2xl border p-3 transition duration-300 hover:-translate-y-1 active:scale-95 ${
                       active
@@ -301,7 +415,7 @@ export default function BNAEngine() {
 
           <button
             type="button"
-            onClick={runBNA}
+            onClick={run}
             disabled={!canRun}
             aria-busy={loading}
             className={`mt-4 w-full rounded-2xl py-4 font-black text-slate-950 transition duration-300 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:hover:scale-100 ${
@@ -310,7 +424,7 @@ export default function BNAEngine() {
                 : 'bg-gradient-to-r from-cyan-300 via-sky-400 to-indigo-500 shadow-[0_0_30px_rgba(34,211,238,0.5)] hover:shadow-[0_0_50px_rgba(34,211,238,0.8)] disabled:shadow-none'
             } ${!canRun && !loading ? 'opacity-40' : ''}`}
           >
-            {loading ? 'جاري الرد...' : 'شغّل BNA 🔵'}
+            {loading ? 'جاري الرد...' : chainMode ? `شغّل السلسلة (${chain.length}) 🔗` : 'شغّل BNA 🔵'}
           </button>
           {loading && (
             <button
