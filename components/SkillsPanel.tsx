@@ -21,6 +21,10 @@ export default function SkillsPanel({
   const [system, setSystem] = useState('');
   const [msg, setMsg] = useState('');
   const [tools, setTools] = useState<ToolsInfo | null>(null);
+  const [ghUrl, setGhUrl] = useState('');
+  const [ghBusy, setGhBusy] = useState(false);
+  const [ghFound, setGhFound] = useState<{ source: string; truncated: number; skills: CustomSkill[] } | null>(null);
+  const [ghPick, setGhPick] = useState<Set<string>>(new Set());
   const importRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -33,6 +37,31 @@ export default function SkillsPanel({
     if (skills.length >= MAX_CUSTOM_SKILLS && !skills.some((k) => k.name === s.name)) { setMsg(`الحد ${MAX_CUSTOM_SKILLS} مهارة`); return; }
     setSkills(mergeSkills(skills, [s]));
     setName(''); setIcon(''); setSystem(''); setMsg(`أُضيفت المهارة «${s.name}» ✓`);
+  }
+
+  async function fetchGh() {
+    if (!ghUrl.trim() || ghBusy) return;
+    setGhBusy(true); setMsg(''); setGhFound(null);
+    try {
+      const res = await fetch('/api/github-skills', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: ghUrl.trim() }) });
+      const d = (await res.json()) as { error?: string; skills?: CustomSkill[]; source?: string; truncated?: number };
+      if (!res.ok || !d.skills) { setMsg(d.error ?? 'تعذر الجلب'); return; }
+      setGhFound({ source: d.source ?? '', truncated: d.truncated ?? 0, skills: d.skills });
+      setGhPick(new Set(d.skills.map((k) => k.name)));
+    } catch {
+      setMsg('تعذر الاتصال بالخادم');
+    } finally {
+      setGhBusy(false);
+    }
+  }
+
+  function addGh() {
+    if (!ghFound) return;
+    const chosen = ghFound.skills.filter((k) => ghPick.has(k.name));
+    if (!chosen.length) return;
+    setSkills(mergeSkills(skills, chosen));
+    setMsg(`أُضيفت ${chosen.length} مهارة من GitHub ✓`);
+    setGhFound(null); setGhUrl('');
   }
 
   async function onImport(f: File | undefined) {
@@ -85,6 +114,47 @@ export default function SkillsPanel({
           <textarea value={system} onChange={(e) => setSystem(e.target.value)} maxLength={MAX_CUSTOM_SYSTEM} placeholder="التعليمات: مثل «أنت خبير تسويق. اكتب نصاً إعلانياً قصيراً بالعراقية مع 3 عناوين مقترحة.»" aria-label="تعليمات المهارة" className="h-24 rounded-xl border border-cyan-300/20 bg-slate-950/60 p-2 text-sm text-slate-100" />
           <button type="button" onClick={add} className="rounded-full bg-cyan-300 px-4 py-1.5 text-sm font-black text-slate-950">حفظ المهارة</button>
         </div>
+      </details>
+
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs font-bold text-cyan-200">🐙 استيراد مهارات من GitHub</summary>
+        <div className="mt-2 flex gap-2">
+          <input
+            value={ghUrl}
+            onChange={(e) => setGhUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void fetchGh(); }}
+            dir="ltr"
+            placeholder="https://github.com/owner/repo  أو  owner/repo"
+            aria-label="رابط GitHub"
+            className="flex-1 rounded-xl border border-cyan-300/20 bg-slate-950/60 p-2 text-sm text-slate-100"
+          />
+          <button type="button" onClick={() => void fetchGh()} disabled={ghBusy} className="rounded-full bg-cyan-300 px-4 py-1.5 text-sm font-black text-slate-950 disabled:opacity-50">
+            {ghBusy ? '…' : 'جلب'}
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-cyan-200/50">يدعم: مستودع/مجلد فيه ملفات SKILL.md، أو ملف bna-skills.json، أو رابط ملف مباشر. يُستورد نص التعليمات فقط ولا يُنفَّذ أي كود.</p>
+        {ghFound && (
+          <div className="mt-2 rounded-2xl border border-cyan-300/20 p-3">
+            <div className="text-xs text-cyan-200/70" dir="ltr">{ghFound.source}</div>
+            <ul className="mt-2 space-y-1">
+              {ghFound.skills.map((k) => (
+                <li key={k.name}>
+                  <label className="flex cursor-pointer items-start gap-2 text-xs text-cyan-100">
+                    <input
+                      type="checkbox"
+                      checked={ghPick.has(k.name)}
+                      onChange={(e) => setGhPick((p) => { const n = new Set(p); if (e.target.checked) n.add(k.name); else n.delete(k.name); return n; })}
+                    />
+                    <span><b>{k.name}</b> — {k.system.slice(0, 90)}…</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            {ghFound.truncated > 0 && <p className="mt-2 text-xs text-amber-200/80">{ghFound.truncated} مهارة اقتُطعت تعليماتها لتناسب الحد ({MAX_CUSTOM_SYSTEM} حرف).</p>}
+            <p className="mt-2 text-xs text-amber-200/80">راجع التعليمات قبل الإضافة: ستُرسل إلى الذكاء الاصطناعي مع طلباتك.</p>
+            <button type="button" onClick={addGh} className="mt-2 rounded-full bg-cyan-300 px-4 py-1.5 text-sm font-black text-slate-950">إضافة المحدد ({ghPick.size})</button>
+          </div>
+        )}
       </details>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">

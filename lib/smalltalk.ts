@@ -43,3 +43,7 @@ export function looksLikeBuildRequest(text: string): boolean {
     /(build|create|make)\s.{0,25}(app|website|web app|project|game)/.test(t)
   );
 }
+
+export function looksLikeSecurityRequest(text: string): boolean {
+  return /(اختبار اختراق|اختراق اخلاقي|اختراق أخلاقي|الأمن السيبراني|الامن السيبراني|أمن سيبراني|امن سيبراني|امن المعلومات|أمن المعلومات|ثغرات|ثغره|ثغرة|pentest|penetration test|ethical hack|cybersecurity|owasp|\bctf\b|bug bounty|hardening|incident response)/i.test(text);
+}
