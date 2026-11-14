@@ -44,7 +44,13 @@ export async function* streamGemini(
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     })),
-    { role: 'user', parts: [{ text: userText }] },
+    {
+      role: 'user',
+      parts: [
+        ...(opts.attachments ?? []).map((a) => ({ inlineData: { mimeType: a.mime, data: a.data } })),
+        { text: userText },
+      ],
+    },
   ];
 
   let res: Response;

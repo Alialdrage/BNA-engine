@@ -6,6 +6,8 @@ import Games from '@/components/Games';
 import { streamBnaFull } from '@/lib/client-api';
 import { ENGINES, MAX_INPUT_LENGTH, parseSlash, slashSuggestions, type EngineId } from '@/lib/engines';
 import { hostOf, linkify } from '@/lib/linkify';
+import { prepareFile, type PreparedFile } from '@/lib/client-files';
+import { recognitionSupported, speak, startListening, stopSpeaking, ttsSupported } from '@/lib/voice';
 import { MAX_STEPS, PRESETS, addStep, nextInput } from '@/lib/pipeline';
 
 type ApiResponse = { result?: string; error?: string };
@@ -95,6 +97,12 @@ export default function BNAEngine() {
   const [engine, setEngine] = useState<EngineId>('AUTO');
   const [menuOpen, setMenuOpen] = useState(false); // الأدوات والمهارات مخفية افتراضياً
   const [style, setStyle] = useState('');
+  const [files, setFiles] = useState<PreparedFile[]>([]);
+  const [listening, setListening] = useState(false);
+  const [speakingId, setSpeakingId] = useState<number | null>(null);
+  const [voiceOk, setVoiceOk] = useState({ mic: false, tts: false });
+  const stopListenRef = useRef<(() => void) | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [chainMode, setChainMode] = useState(false);
   const [chain, setChain] = useState<EngineId[]>([]);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -106,8 +114,47 @@ export default function BNAEngine() {
 
   useEffect(() => {
     setTurns(loadTurns());
+    setVoiceOk({ mic: recognitionSupported(), tts: ttsSupported() });
+    return () => stopSpeaking();
     try { setStyle(localStorage.getItem('bna-style-v1') ?? ''); } catch { /* غير متاح */ }
   }, []);
+
+  async function addFiles(list: FileList | null) {
+    if (!list) return;
+    setError('');
+    for (const f of Array.from(list)) {
+      if (files.length + 1 > 3) { setError('الحد الأقصى 3 مرفقات'); break; }
+      try {
+        const pf = await prepareFile(f);
+        setFiles((prev) => (prev.length < 3 ? [...prev, pf] : prev));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'تعذر قراءة الملف');
+      }
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  function toggleMic() {
+    if (listening) { stopListenRef.current?.(); return; }
+    const base = input ? `${input.trimEnd()} ` : '';
+    setListening(true);
+    setError('');
+    try {
+      stopListenRef.current = startListening(
+        (text) => setInput((base + text).slice(0, MAX_INPUT_LENGTH)),
+        (err) => { setListening(false); if (err) setError(err); },
+      );
+    } catch {
+      setListening(false);
+      setError('الإملاء الصوتي غير مدعوم في هذا المتصفح (جرّب Chrome)');
+    }
+  }
+
+  function toggleSpeak(t: Turn) {
+    if (speakingId === t.id) { stopSpeaking(); setSpeakingId(null); return; }
+    setSpeakingId(t.id);
+    speak(t.output, () => setSpeakingId(null));
+  }
 
   function saveStyle(v: string) {
     setStyle(v);
@@ -130,7 +177,7 @@ export default function BNAEngine() {
   const effChain = menuOpen && chainMode;
   const suggestions = slashSuggestions(input);
   const canRun =
-    !loading && input.trim().length > 0 && input.length <= MAX_INPUT_LENGTH && (!effChain || chain.length >= 2);
+    !loading && (input.trim().length > 0 || files.length > 0) && input.length <= MAX_INPUT_LENGTH && (!effChain || chain.length >= 2);
   const nearLimit = input.length > MAX_INPUT_LENGTH * 0.9;
 
   async function runBNA() {
@@ -140,7 +187,12 @@ export default function BNAEngine() {
       setError('اكتب طلبك بعد اسم المهارة، مثل: /صور قطة تلبس نظارات');
       return;
     }
-    const text = slash ? slash.text : input.trim();
+    const typed = slash ? slash.text : input.trim();
+    const textBlocks = files.filter((f) => f.text !== undefined).map((f) => `\n\n--- ملف: ${f.name} ---\n${f.text}`).join('');
+    const atts = files.flatMap((f) => (f.att ? [f.att] : []));
+    const base = typed || (files.length ? (atts.length ? 'صف هذا المرفق ولخّصه' : 'لخّص هذا الملف') : '');
+    const text = (base + textBlocks).slice(0, MAX_INPUT_LENGTH);
+    const shown = files.length ? `${typed} 📎 ${files.map((f) => f.name).join('، ')}`.trim() : text;
     // آخر المحادثات ترسل للخادم كذاكرة (تُستخدم لمحركات الذكاء الاصطناعي فقط)
     const history = turns
       .slice(0, HISTORY_TURNS)
@@ -154,14 +206,14 @@ export default function BNAEngine() {
     abortRef.current = ctrl;
     setLoading(true);
     setError('');
-    setLive({ engine: '', input: text, output: '' });
+    setLive({ engine: '', input: shown, output: '' });
     let label = '';
     let output = '';
     try {
       const res = await fetch('/api/bna', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: slash?.engine ?? effEngine, input: text, history, stream: true, style }),
+        body: JSON.stringify({ engine: slash?.engine ?? effEngine, input: text, history, stream: true, style, attachments: atts }),
         signal: ctrl.signal,
       });
       if (!res.ok || !res.body) {
@@ -177,7 +229,7 @@ export default function BNAEngine() {
         const { done, value } = await reader.read();
         if (done) break;
         output += decoder.decode(value, { stream: true });
-        setLive({ engine: label, input: text, output });
+        setLive({ engine: label, input: shown, output });
       }
       output += decoder.decode();
     } catch (err) {
@@ -186,13 +238,14 @@ export default function BNAEngine() {
       }
     } finally {
       if (output.trim()) {
-        const turn: Turn = { id: Date.now(), engine: label, input: text, output: output.trim() };
+        const turn: Turn = { id: Date.now(), engine: label, input: shown, output: output.trim() };
         setTurns((prev) => {
           const next = [turn, ...prev].slice(0, MAX_TURNS);
           persist(next);
           return next;
         });
         setInput('');
+        setFiles([]);
       }
       setLive(null);
       setLoading(false);
@@ -457,6 +510,43 @@ export default function BNAEngine() {
             className="h-40 w-full rounded-2xl border border-cyan-300/20 bg-slate-950/60 p-4 text-slate-100 outline-none transition duration-300 placeholder:text-cyan-200/40 focus:border-cyan-300 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.25),0_0_30px_rgba(34,211,238,0.35)]"
           />
 
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              hidden
+              accept="image/*,application/pdf,text/*,.md,.csv,.json,.py,.js,.ts,.tsx,.html,.css,.sql,.log"
+              onChange={(e) => void addFiles(e.target.files)}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={loading || files.length >= 3}
+              className="rounded-full border border-cyan-300/30 px-3 py-1 text-xs font-bold text-cyan-200 hover:border-cyan-300 disabled:opacity-40"
+            >
+              📎 صورة / PDF / ملف
+            </button>
+            {voiceOk.mic && (
+              <button
+                type="button"
+                onClick={toggleMic}
+                aria-pressed={listening}
+                className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                  listening ? 'border-rose-300 bg-rose-500/20 text-rose-100' : 'border-cyan-300/30 text-cyan-200 hover:border-cyan-300'
+                }`}
+              >
+                {listening ? '⏹ إيقاف الإملاء' : '🎤 إملاء بالصوت'}
+              </button>
+            )}
+            {files.map((f) => (
+              <span key={f.id} className="inline-flex items-center gap-1 rounded-full bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
+                {f.att?.mime.startsWith('image/') ? '🖼️' : '📄'} {f.name}
+                <button type="button" aria-label="إزالة المرفق" onClick={() => setFiles((p) => p.filter((x) => x.id !== f.id))} className="hover:text-rose-300">✕</button>
+              </span>
+            ))}
+          </div>
+
           {suggestions.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2" role="listbox" aria-label="مهارات مقترحة">
               {suggestions.map((sg) => (
@@ -542,6 +632,11 @@ export default function BNAEngine() {
               <span className="min-w-0 truncate text-cyan-200/60">أنت: {t.input.slice(0, 120)}</span>
               <span className="flex shrink-0 items-center gap-3">
                 {t.engine && <span className="rounded-full bg-cyan-300/10 px-2 py-0.5 text-cyan-200">{t.engine}</span>}
+                {voiceOk.tts && (
+                  <button type="button" onClick={() => toggleSpeak(t)} className="font-bold text-cyan-300 hover:underline">
+                    {speakingId === t.id ? '⏹ إيقاف' : '🔊 استماع'}
+                  </button>
+                )}
                 <button type="button" onClick={() => copy(t)} className="font-bold text-cyan-300 hover:underline">
                   {copied === t.id ? 'تم النسخ ✓' : 'نسخ'}
                 </button>
