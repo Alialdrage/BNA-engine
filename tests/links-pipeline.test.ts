@@ -57,3 +57,25 @@ test('السلاسل: الحد الأقصى، ومدخل الخطوة التال
     assert.ok(p.steps.every((x) => ids.has(x)), p.id);
   }
 });
+
+import { parseSlash, slashSuggestions } from '../lib/engines';
+
+test('أوامر الشرطة المائلة: اختيار المهارة من صندوق الطلب', () => {
+  assert.deepEqual(parseSlash('/صور قطة تلبس نظارات'), { engine: 'IMAGE', text: 'قطة تلبس نظارات' });
+  assert.deepEqual(parseSlash('/translate hello world'), { engine: 'TRANSLATE', text: 'hello world' });
+  // الاسم الأطول يغلب الأقصر: "بحث عميق" وليس "بحث"
+  assert.equal(parseSlash('/بحث عميق أسعار النفط')?.engine, 'DEEPRESEARCH');
+  assert.equal(parseSlash('/بحث أسعار')?.engine, 'SEARCH');
+  assert.equal(parseSlash('/بحث ويب أخبار')?.engine, 'WEBSEARCH');
+  assert.deepEqual(parseSlash('/حاسبة'), { engine: 'CALC', text: '' });
+  assert.equal(parseSlash('/غير_موجود شيء'), null);
+  assert.equal(parseSlash('نص عادي /صور'), null);
+  assert.equal(parseSlash('/صورة'), null); // لا مطابقة جزئية داخل الكلمة
+});
+
+test('اقتراحات الشرطة المائلة', () => {
+  assert.ok(slashSuggestions('/').length > 0);
+  assert.deepEqual(slashSuggestions('/صو').map((x) => x.id), ['IMAGE']);
+  assert.deepEqual(slashSuggestions('/صور قطة'), []);
+  assert.deepEqual(slashSuggestions('نص'), []);
+});

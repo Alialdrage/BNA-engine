@@ -37,3 +37,33 @@ export type ConcreteEngine = Exclude<EngineId, 'AUTO'>;
 export const ENGINE_IDS = ENGINES.map((e) => e.id) as EngineId[];
 
 export const MAX_INPUT_LENGTH = 20000;
+
+// اختيار المهارة من داخل صندوق الطلب: "/صور قطة" أو "/translate hello"
+export function parseSlash(input: string): { engine: ConcreteEngine; text: string } | null {
+  const t = input.trimStart();
+  if (!t.startsWith('/')) return null;
+  const rest = t.slice(1);
+  const names = ENGINES.filter((e) => e.id !== 'AUTO')
+    .flatMap((e) => [
+      { key: e.name.toLowerCase(), id: e.id },
+      { key: e.id.toLowerCase(), id: e.id },
+    ])
+    .sort((a, b) => b.key.length - a.key.length);
+  const lower = rest.toLowerCase();
+  for (const n of names) {
+    if (lower.startsWith(n.key) && (rest.length === n.key.length || /\s/.test(rest[n.key.length]))) {
+      return { engine: n.id as ConcreteEngine, text: rest.slice(n.key.length).trim() };
+    }
+  }
+  return null;
+}
+
+// اقتراحات المهارات أثناء كتابة "/..."
+export function slashSuggestions(input: string, limit = 8): Array<{ id: ConcreteEngine; name: string; icon: string }> {
+  const m = /^\s*\/([^\s]*)$/.exec(input);
+  if (!m) return [];
+  const q = m[1].toLowerCase();
+  return ENGINES.filter((e) => e.id !== 'AUTO' && (e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)))
+    .slice(0, limit)
+    .map((e) => ({ id: e.id as ConcreteEngine, name: e.name, icon: e.icon }));
+}
