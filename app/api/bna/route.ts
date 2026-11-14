@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   MAX_INPUT_LENGTH, callsPaidApi, engineName, isEngineId, resolveEngine,
-  providerAvailableFor, sanitizeHistory, streamEngine, usesWebSearch,
+  providerAvailableFor, cleanStyle, sanitizeHistory, streamEngine, usesWebSearch,
 } from '@/lib/bna-engine';
 import { checkRateLimit, clientIp } from '@/lib/rate-limit';
 
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'الطلب غير صالح' }, { status: 400 });
   }
 
-  const { engine, input, history, stream } = (
+  const { engine, input, history, stream, style } = (
     typeof body === 'object' && body !== null ? body : {}
   ) as Record<string, unknown>;
 
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   }
 
   const label = engine === 'AUTO' ? `تلقائي ← ${engineName(target)}` : engineName(target);
-  const gen = streamEngine(target, text, sanitizeHistory(history));
+  const gen = streamEngine(target, text, sanitizeHistory(history), cleanStyle(style));
 
   // ننتظر أول قطعة قبل الرد، فإن فشلت الخدمة نرجع رمز خطأ حقيقياً بدل رد 200 فارغ
   let first: IteratorResult<string>;

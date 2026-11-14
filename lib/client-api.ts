@@ -2,7 +2,7 @@
 export async function streamBna(
   engine: string,
   input: string,
-  opts: { signal?: AbortSignal; onChunk?: (full: string) => void } = {},
+  opts: { signal?: AbortSignal; onChunk?: (full: string) => void; style?: string } = {},
 ): Promise<string> {
   return (await streamBnaFull(engine, input, opts)).text;
 }
@@ -11,12 +11,12 @@ export async function streamBna(
 export async function streamBnaFull(
   engine: string,
   input: string,
-  opts: { signal?: AbortSignal; onChunk?: (full: string) => void } = {},
+  opts: { signal?: AbortSignal; onChunk?: (full: string) => void; style?: string } = {},
 ): Promise<{ text: string; label: string }> {
   const res = await fetch('/api/bna', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ engine, input, history: [], stream: true }),
+    body: JSON.stringify({ engine, input, history: [], stream: true, style: opts.style ?? '' }),
     signal: opts.signal,
   });
   if (!res.ok || !res.body) {
