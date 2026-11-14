@@ -6,7 +6,7 @@ export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 export type ImageParams = { prompt: string; width: number; height: number; seed: number; model: string };
 
-const clampDim = (n: number) => Math.min(1536, Math.max(256, Math.round(n / 64) * 64));
+const clampDim = (n: number) => Math.min(768, Math.max(256, Math.round(n / 64) * 64));
 
 export function parseImageParams(sp: URLSearchParams): ImageParams | { error: string } {
   const prompt = (sp.get('prompt') ?? '').trim();
@@ -19,8 +19,8 @@ export function parseImageParams(sp: URLSearchParams): ImageParams | { error: st
   const model = sp.get('model') ?? 'flux';
   return {
     prompt,
-    width: clampDim(num('w', 1024)),
-    height: clampDim(num('h', 1024)),
+    width: clampDim(num('w', 768)),
+    height: clampDim(num('h', 768)),
     seed: Math.abs(Math.floor(num('seed', 0))) % 1_000_000,
     model: (IMAGE_MODELS as readonly string[]).includes(model) ? model : 'flux',
   };
@@ -29,7 +29,7 @@ export function parseImageParams(sp: URLSearchParams): ImageParams | { error: st
 export function upstreamUrl(p: ImageParams): string {
   return (
     `https://image.pollinations.ai/prompt/${encodeURIComponent(p.prompt)}` +
-    `?width=${p.width}&height=${p.height}&seed=${p.seed}&model=${p.model}&nologo=true`
+    `?width=${p.width}&height=${p.height}&seed=${p.seed}`
   );
 }
 
@@ -43,7 +43,7 @@ export function localImageUrl(p: Omit<ImageParams, 'model'> & { model?: string }
 }
 
 export function sizeFromText(text: string): { width: number; height: number } {
-  if (/عمودي|portrait|vertical|ستوري|story/i.test(text)) return { width: 768, height: 1024 };
-  if (/أفقي|افقي|landscape|wide|يوتيوب|youtube|16:9/i.test(text)) return { width: 1024, height: 576 };
-  return { width: 1024, height: 1024 };
+  if (/عمودي|portrait|vertical|ستوري|story/i.test(text)) return { width: 576, height: 768 };
+  if (/أفقي|افقي|landscape|wide|يوتيوب|youtube|16:9/i.test(text)) return { width: 768, height: 448 };
+  return { width: 768, height: 768 };
 }

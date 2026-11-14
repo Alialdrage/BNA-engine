@@ -2,6 +2,7 @@
 
 export const ENGINES = [
   { id: 'AUTO', name: 'تلقائي', icon: '⚡', group: 'ai' },
+  { id: 'CHAT', name: 'محادثة', icon: '💭', group: 'ai' },
   { id: 'ML', name: 'ذكاء اصطناعي', icon: '🧠', group: 'ai' },
   { id: 'NLP', name: 'لغة عراقية', icon: '💬', group: 'ai' },
   { id: 'GEMINI4', name: 'Gemini 4', icon: '💎', group: 'ai' },

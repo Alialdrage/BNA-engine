@@ -30,6 +30,12 @@ export async function GET(request: Request) {
   }
 
   const type = upstream.headers.get('content-type') ?? '';
+  if (upstream.status === 402 || upstream.status === 429) {
+    return NextResponse.json(
+      { error: 'خدمة الصور المجانية مشغولة (حد الطلبات). انتظر نحو 30 ثانية وأعد المحاولة.' },
+      { status: 429, headers: { 'Retry-After': '30' } },
+    );
+  }
   if (!upstream.ok || !/^image\/(png|jpe?g|webp)/i.test(type)) {
     return NextResponse.json({ error: `خدمة الصور رجعت خطأ (${upstream.status})` }, { status: 502 });
   }

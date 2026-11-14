@@ -49,7 +49,7 @@ test('معاملات الصورة: تحقق وقصّ وقيم افتراضية',
   const p = parseImageParams(new URLSearchParams('prompt=cat&w=99999&h=10&seed=-5&model=evil'));
   assert.ok(!('error' in p));
   if (!('error' in p)) {
-    assert.equal(p.width, 1536);
+    assert.equal(p.width, 768);
     assert.equal(p.height, 256);
     assert.equal(p.seed, 5);
     assert.equal(p.model, 'flux');
@@ -61,7 +61,7 @@ test('رابط الصورة: ترميز آمن لا يخرج من المسار',
   assert.ok(url.startsWith('https://image.pollinations.ai/prompt/a%2Fb%3Fc%3Dd%23e%20(x)?'));
   const local = localImageUrl({ prompt: 'قطة (جميلة)', width: 512, height: 512, seed: 1 });
   assert.ok(!/[()\s]/.test(local));
-  assert.deepEqual(sizeFromText('صورة عمودي'), { width: 768, height: 1024 });
+  assert.deepEqual(sizeFromText('صورة عمودي'), { width: 576, height: 768 });
 });
 
 test('محرك الصور يعمل بدون مفتاح ويرجع رابطاً داخلياً فقط', async () => {

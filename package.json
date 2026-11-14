@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "FREE_LLM=off tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "docx": "^9.15.3",
