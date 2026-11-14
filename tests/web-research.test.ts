@@ -80,7 +80,7 @@ test('Claude: أداة البحث تُرسل والمصادر المستشهد �
     assert.equal(body?.max_tokens, 999);
     assert.match(out, /^السعر كذا/);
     assert.match(out, /استعلامات البحث: سعر الذهب/);
-    assert.match(out, /1\. مصدر ب\n\s+https:\/\/b\.example\/2/);
+    assert.match(out, /1\. \[مصدر ب\]\(https:\/\/b\.example\/2\)/);
     assert.doesNotMatch(out, /مصدر أ|javascript/); // نعرض المستشهد به فقط
   } finally {
     globalThis.fetch = real;
@@ -97,7 +97,7 @@ test('Claude: بدون استشهاد نعرض نتائج البحث الآمن�
         { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'نص' } },
       ])) as typeof fetch;
     const out = await withKey({ ANTHROPIC_API_KEY: 'k' }, () => collect(streamClaude('s', 'u', [], { webSearchMaxUses: 2 })));
-    assert.match(out, /1\. ج\n\s+https:\/\/c\.example/);
+    assert.match(out, /1\. \[ج\]\(https:\/\/c\.example\/\)/);
 
     globalThis.fetch = (async (_u: unknown, init?: RequestInit) => {
       sentTools = (JSON.parse(String(init?.body)) as { tools?: unknown }).tools;
@@ -151,7 +151,7 @@ test('Gemini: google_search ومصادر التأريض', async () => {
     assert.deepEqual(body?.tools, [{ google_search: {} }]);
     assert.match(out, /^جواب نهائي/);
     assert.match(out, /استعلامات البحث: q1/);
-    assert.match(out, /1\. g\.example\n\s+https:\/\/g\.example\/x/);
+    assert.match(out, /1\. \[g\.example\]\(https:\/\/g\.example\/x\)/);
     assert.doesNotMatch(out, /ftp/);
   } finally {
     globalThis.fetch = real;
