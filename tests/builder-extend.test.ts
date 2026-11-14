@@ -146,3 +146,58 @@ test('توجيه AUTO لباني المشاريع، والمهارة المخص�
     delete process.env.ANTHROPIC_API_KEY;
   }
 });
+
+import { fetchGithubSkills, parseGithubUrl, parseSkillMd } from '../lib/github-skills';
+
+test('تحليل روابط GitHub', () => {
+  assert.deepEqual(parseGithubUrl('owner/repo'), { owner: 'owner', repo: 'repo', path: '', isFile: false });
+  assert.deepEqual(parseGithubUrl('https://github.com/a/b.git'), { owner: 'a', repo: 'b', path: '', isFile: false });
+  assert.deepEqual(parseGithubUrl('https://github.com/a/b/tree/dev/skills/x'), { owner: 'a', repo: 'b', ref: 'dev', path: 'skills/x', isFile: false });
+  assert.deepEqual(parseGithubUrl('https://github.com/a/b/blob/main/s/SKILL.md'), { owner: 'a', repo: 'b', ref: 'main', path: 's/SKILL.md', isFile: true });
+  assert.equal(parseGithubUrl('https://raw.githubusercontent.com/a/b/main/s.json')?.isFile, true);
+  for (const bad of ['http://github.com/a/b', 'https://evil.com/a/b', 'https://github.com/a', 'https://github.com/a/b/blob/main/../x', 'a b/c', 'javascript:alert(1)', '']) {
+    assert.equal(parseGithubUrl(bad), null, bad);
+  }
+});
+
+test('تحليل SKILL.md', () => {
+  const r = parseSkillMd('---\nname: code reviewer\ndescription: يراجع الكود\n---\n# عنوان\nراجع الكود وأعط ملاحظات أمنية.', 'x')!;
+  assert.equal(r.skill.name, 'code-reviewer');
+  assert.match(r.skill.system, /يراجع الكود[\s\S]*ملاحظات أمنية/);
+  assert.equal(r.truncated, false);
+  assert.equal(parseSkillMd('x'.repeat(3000), 'big')!.truncated, true);
+  assert.equal(parseSkillMd('قصير', 'x'), null);
+});
+
+test('جلب المهارات من GitHub (fetch وهمي): حزمة JSON، وSKILL.md من الشجرة', async () => {
+  const calls: string[] = [];
+  const tree = {
+    tree: [
+      { path: 'skills/a/SKILL.md', type: 'blob', size: 100 },
+      { path: 'skills/b/SKILL.md', type: 'blob', size: 100 },
+      { path: 'README.md', type: 'blob', size: 10 },
+      { path: 'big/SKILL.md', type: 'blob', size: 9_999_999 },
+    ],
+  };
+  const fake = (async (u: unknown) => {
+    const url = String(u);
+    calls.push(url);
+    if (url.endsWith('/bna-skills.json')) return new Response('nf', { status: 404 });
+    if (url.includes('api.github.com')) return new Response(JSON.stringify(tree));
+    if (url.includes('/skills/a/SKILL.md')) return new Response('---\nname: alpha\ndescription: وصف ألفا\n---\nتعليمات ألفا الكاملة هنا.');
+    if (url.includes('/skills/b/SKILL.md')) return new Response('# Beta\nتعليمات بيتا الكاملة هنا للتجربة.');
+    return new Response('?', { status: 404 });
+  }) as typeof fetch;
+  const r = await fetchGithubSkills({ owner: 'o', repo: 'r', path: '', isFile: false }, fake);
+  assert.ok('skills' in r);
+  if ('skills' in r) assert.deepEqual(r.skills.map((s) => s.name).sort(), ['Beta', 'alpha']);
+  assert.ok(calls.every((c) => /^https:\/\/(api\.github\.com|raw\.githubusercontent\.com)\//.test(c)), calls.join());
+
+  const packFake = (async () => new Response(JSON.stringify({ skills: [{ name: 'مترجم', system: 'ترجم النص إلى الإنجليزية بدقة.' }] }))) as typeof fetch;
+  const p = await fetchGithubSkills({ owner: 'o', repo: 'r', ref: 'main', path: 'x/bna-skills.json', isFile: true }, packFake);
+  assert.ok('skills' in p && p.skills[0].name === 'مترجم');
+
+  const none = (async () => new Response('nf', { status: 404 })) as typeof fetch;
+  const e = await fetchGithubSkills({ owner: 'o', repo: 'r', path: '', isFile: false }, none);
+  assert.ok('error' in e);
+});
