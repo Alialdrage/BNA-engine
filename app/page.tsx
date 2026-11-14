@@ -1,6 +1,9 @@
 'use client';
 
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import ProjectDownloads from '@/components/ProjectDownloads';
+import SkillsPanel from '@/components/SkillsPanel';
+import { normalizeSkill, type CustomSkill } from '@/lib/custom-skills';
 import BookStudio from '@/components/BookStudio';
 import Games from '@/components/Games';
 import { streamBnaFull } from '@/lib/client-api';
@@ -97,6 +100,8 @@ export default function BNAEngine() {
   const [engine, setEngine] = useState<EngineId>('AUTO');
   const [menuOpen, setMenuOpen] = useState(false); // الأدوات والمهارات مخفية افتراضياً
   const [style, setStyle] = useState('');
+  const [skills, setSkillsState] = useState<CustomSkill[]>([]);
+  const [activeSkill, setActiveSkill] = useState<string | null>(null);
   const [files, setFiles] = useState<PreparedFile[]>([]);
   const [listening, setListening] = useState(false);
   const [speakingId, setSpeakingId] = useState<number | null>(null);
@@ -117,6 +122,10 @@ export default function BNAEngine() {
     setVoiceOk({ mic: recognitionSupported(), tts: ttsSupported() });
     return () => stopSpeaking();
     try { setStyle(localStorage.getItem('bna-style-v1') ?? ''); } catch { /* غير متاح */ }
+    try {
+      const raw = JSON.parse(localStorage.getItem('bna-skills-v1') ?? '[]') as unknown[];
+      setSkillsState(Array.isArray(raw) ? raw.map(normalizeSkill).filter((x): x is CustomSkill => x !== null).slice(0, 20) : []);
+    } catch { /* غير متاح */ }
   }, []);
 
   async function addFiles(list: FileList | null) {
@@ -156,6 +165,11 @@ export default function BNAEngine() {
     speak(t.output, () => setSpeakingId(null));
   }
 
+  function setSkills(next: CustomSkill[]) {
+    setSkillsState(next);
+    try { localStorage.setItem('bna-skills-v1', JSON.stringify(next)); } catch { /* غير متاح */ }
+  }
+
   function saveStyle(v: string) {
     setStyle(v);
     try { localStorage.setItem('bna-style-v1', v); } catch { /* غير متاح */ }
@@ -173,7 +187,8 @@ export default function BNAEngine() {
   }
 
   // عند إخفاء القائمة نعمل بالوضع التلقائي دائماً، فلا تؤثر اختيارات مخفية على الطلب
-  const effEngine: EngineId = menuOpen ? engine : 'AUTO';
+  const selectedSkill = menuOpen && activeSkill ? skills.find((k) => k.id === activeSkill) ?? null : null;
+  const effEngine: EngineId = selectedSkill ? 'CUSTOM' : menuOpen ? engine : 'AUTO';
   const effChain = menuOpen && chainMode;
   const suggestions = slashSuggestions(input);
   const canRun =
@@ -182,7 +197,16 @@ export default function BNAEngine() {
 
   async function runBNA() {
     if (!canRun) return;
-    const slash = parseSlash(input);
+    let customSel: CustomSkill | null = selectedSkill;
+    let slash = parseSlash(input);
+    const t0 = input.trimStart();
+    if (t0.startsWith('/')) {
+      const hit = [...skills].sort((a, b) => b.name.length - a.name.length).find((k) => {
+        const rest = t0.slice(1);
+        return rest.startsWith(k.name) && (rest.length === k.name.length || /\s/.test(rest[k.name.length]));
+      });
+      if (hit) { customSel = hit; slash = { engine: 'CUSTOM', text: t0.slice(1 + hit.name.length).trim() }; }
+    }
     if (slash && !slash.text) {
       setError('اكتب طلبك بعد اسم المهارة، مثل: /صور قطة تلبس نظارات');
       return;
@@ -213,7 +237,7 @@ export default function BNAEngine() {
       const res = await fetch('/api/bna', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: slash?.engine ?? effEngine, input: text, history, stream: true, style, attachments: atts }),
+        body: JSON.stringify({ engine: slash?.engine ?? effEngine, input: text, history, stream: true, style, attachments: atts, ...(customSel && (slash?.engine ?? effEngine) === 'CUSTOM' ? { custom: customSel } : {}) }),
         signal: ctrl.signal,
       });
       if (!res.ok || !res.body) {
@@ -389,6 +413,7 @@ export default function BNAEngine() {
 
         {menuOpen && (
           <>
+        <SkillsPanel skills={skills} setSkills={setSkills} active={activeSkill} setActive={setActiveSkill} />
         <section className="glass mt-6 rounded-3xl p-4">
           <details className="mb-3">
             <summary className="cursor-pointer text-sm font-bold text-cyan-200">✍️ أسلوبي في الكتابة (يُطبَّق على الكتابة والتحرير)</summary>
@@ -474,7 +499,7 @@ export default function BNAEngine() {
                     key={e.id}
                     type="button"
                     aria-pressed={active}
-                    onClick={() => (chainMode ? setChain((c) => addStep(c, e.id)) : setEngine(e.id))}
+                    onClick={() => (chainMode ? setChain((c) => addStep(c, e.id)) : (setActiveSkill(null), setEngine(e.id)))}
                     onMouseMove={trackPointer}
                     className={`spotlight group rounded-2xl border p-3 transition duration-300 hover:-translate-y-1 active:scale-95 ${
                       active
@@ -643,6 +668,7 @@ export default function BNAEngine() {
               </span>
             </div>
             <Output text={t.output} />
+            <ProjectDownloads output={t.output} />
           </section>
         ))}
           </>

@@ -12,10 +12,10 @@ function sse(events: unknown[]): Response {
 }
 const collect = async (g: AsyncGenerator<string>) => { let o = ''; for await (const c of g) o += c; return o; };
 
-test('الأدوات المحلية', () => {
-  assert.match(runTool('calculate', { input: '2+2*3' }), /8/);
-  assert.equal(runTool('nope', { input: 'x' }), 'أداة غير معروفة');
-  assert.equal(runTool('calculate', {}), 'مدخل فارغ');
+test('الأدوات المحلية', async () => {
+  assert.match(await runTool('calculate', { input: '2+2*3' }), /8/);
+  assert.equal(await runTool('nope', { input: 'x' }), 'أداة غير معروفة');
+  assert.equal(await runTool('calculate', {}), 'مدخل فارغ');
   assert.ok(TOOLS.every((t) => t.name && t.input_schema));
 });
 
