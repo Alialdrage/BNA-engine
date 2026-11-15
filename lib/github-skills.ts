@@ -60,11 +60,21 @@ export function parseSkillMd(text: string, fallbackName: string): { skill: Custo
 
 type Fetcher = typeof fetch;
 
+const ALLOWED_HOSTS = new Set(['raw.githubusercontent.com', 'api.github.com']);
+
 async function getText(url: string, f: Fetcher, apiHost: boolean): Promise<string | null> {
   const headers: Record<string, string> = { 'user-agent': 'bna-engine', accept: apiHost ? 'application/vnd.github+json' : 'text/plain' };
   if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   try {
-    const res = await f(url, { headers, redirect: 'error', signal: AbortSignal.timeout(FETCH.timeout) });
+    // نسمح بـfollow للـredirects لكن نتحقق أن الوجهة النهائية لا تخرج عن المضيفات المصرّح بها
+    const res = await f(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(FETCH.timeout) });
+    // فحص URL النهائي بعد أي redirect؛ إذا كان res.url فارغاً (بيئة اختبار) نعود للـURL الأصلي
+    try {
+      const finalHost = new URL(res.url || url).hostname;
+      if (!ALLOWED_HOSTS.has(finalHost)) return null;
+    } catch {
+      return null;
+    }
     if (!res.ok) return null;
     const len = Number(res.headers.get('content-length') ?? 0);
     if (len > MAX_FILE_BYTES * 20) return null;
