@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'الطلب غير صالح' }, { status: 400 });
   }
 
-  const { engine, input, history, stream, style, attachments, custom } = (
+  const { engine, input, history, stream, style, attachments, custom, memory } = (
     typeof body === 'object' && body !== null ? body : {}
   ) as Record<string, unknown>;
 
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
   }
 
   const label = customSkill && target === 'CUSTOM' ? `مهارتي: ${customSkill.name}` : engine === 'AUTO' ? `تلقائي ← ${engineName(target)}` : engineName(target);
-  const gen = streamEngine(target, text, sanitizeHistory(history), cleanStyle(style), atts, customSkill ?? undefined);
+  const gen = streamEngine(target, text, sanitizeHistory(history), cleanStyle(style), atts, customSkill ?? undefined, typeof memory === 'string' ? memory : '');
 
   // ننتظر أول قطعة قبل الرد، فإن فشلت الخدمة نرجع رمز خطأ حقيقياً بدل رد 200 فارغ
   let first: IteratorResult<string>;

@@ -1,6 +1,8 @@
 'use client';
 
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import MemoryPanel from '@/components/MemoryPanel';
+import { memoryToContext, normalizeItems, type MemoryItem } from '@/lib/memory';
 import ProjectDownloads from '@/components/ProjectDownloads';
 import SkillsPanel from '@/components/SkillsPanel';
 import { normalizeSkill, type CustomSkill } from '@/lib/custom-skills';
@@ -100,6 +102,8 @@ export default function BNAEngine() {
   const [engine, setEngine] = useState<EngineId>('AUTO');
   const [menuOpen, setMenuOpen] = useState(false); // الأدوات والمهارات مخفية افتراضياً
   const [style, setStyle] = useState('');
+  const [memItems, setMemItemsState] = useState<MemoryItem[]>([]);
+  const [memOn, setMemOnState] = useState(true);
   const [skills, setSkillsState] = useState<CustomSkill[]>([]);
   const [activeSkill, setActiveSkill] = useState<string | null>(null);
   const [files, setFiles] = useState<PreparedFile[]>([]);
@@ -122,6 +126,10 @@ export default function BNAEngine() {
     setVoiceOk({ mic: recognitionSupported(), tts: ttsSupported() });
     return () => stopSpeaking();
     try { setStyle(localStorage.getItem('bna-style-v1') ?? ''); } catch { /* غير متاح */ }
+    try {
+      setMemItemsState(normalizeItems(JSON.parse(localStorage.getItem('bna-memory-v1') ?? '[]')));
+      setMemOnState(localStorage.getItem('bna-memory-on') !== '0');
+    } catch { /* غير متاح */ }
     try {
       const raw = JSON.parse(localStorage.getItem('bna-skills-v1') ?? '[]') as unknown[];
       setSkillsState(Array.isArray(raw) ? raw.map(normalizeSkill).filter((x): x is CustomSkill => x !== null).slice(0, 20) : []);
@@ -164,6 +172,18 @@ export default function BNAEngine() {
     setSpeakingId(t.id);
     speak(t.output, () => setSpeakingId(null));
   }
+
+  function setMemItems(next: MemoryItem[]) {
+    setMemItemsState(next);
+    try { localStorage.setItem('bna-memory-v1', JSON.stringify(next)); } catch { /* غير متاح */ }
+  }
+
+  function setMemOn(v: boolean) {
+    setMemOnState(v);
+    try { localStorage.setItem('bna-memory-on', v ? '1' : '0'); } catch { /* غير متاح */ }
+  }
+
+  const memoryCtx = memOn ? memoryToContext(memItems) : '';
 
   function setSkills(next: CustomSkill[]) {
     setSkillsState(next);
@@ -237,7 +257,7 @@ export default function BNAEngine() {
       const res = await fetch('/api/bna', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engine: slash?.engine ?? effEngine, input: text, history, stream: true, style, attachments: atts, ...(customSel && (slash?.engine ?? effEngine) === 'CUSTOM' ? { custom: customSel } : {}) }),
+        body: JSON.stringify({ engine: slash?.engine ?? effEngine, input: text, history, stream: true, style, memory: memoryCtx, attachments: atts, ...(customSel && (slash?.engine ?? effEngine) === 'CUSTOM' ? { custom: customSel } : {}) }),
         signal: ctrl.signal,
       });
       if (!res.ok || !res.body) {
@@ -295,6 +315,7 @@ export default function BNAEngine() {
         const { text, label } = await streamBnaFull(steps[i], current, {
           signal: ctrl.signal,
           style,
+          memory: memoryCtx,
           onChunk: (full) => setLive({ engine: tag, input: shownInput, output: full }),
         });
         if (!text.trim()) throw new Error(`${tag}: لم يصل ناتج`);
@@ -413,6 +434,7 @@ export default function BNAEngine() {
 
         {menuOpen && (
           <>
+        <MemoryPanel items={memItems} setItems={setMemItems} enabled={memOn} setEnabled={setMemOn} />
         <SkillsPanel skills={skills} setSkills={setSkills} active={activeSkill} setActive={setActiveSkill} />
         <section className="glass mt-6 rounded-3xl p-4">
           <details className="mb-3">
