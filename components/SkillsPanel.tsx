@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   MAX_CUSTOM_SKILLS, MAX_CUSTOM_SYSTEM, exportPack, importPack, mergeSkills, normalizeSkill,
   type CustomSkill,
@@ -8,7 +8,7 @@ import {
 
 type ToolsInfo = { builtin: Array<{ name: string; description: string }>; external: Array<{ name: string; description: string }> };
 
-export default function SkillsPanel({
+const SkillsPanel = memo(function SkillsPanel({
   skills, setSkills, active, setActive,
 }: {
   skills: CustomSkill[];
@@ -182,4 +182,5 @@ export default function SkillsPanel({
       )}
     </section>
   );
-}
+});
+export default SkillsPanel;

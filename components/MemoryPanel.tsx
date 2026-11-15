@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import {
   CATEGORY_LABELS, MAX_MEMORY_ITEMS, MEMORY_CATEGORIES, addItem, exportMemory, parseMemoryExport,
   type MemoryCategory, type MemoryItem,
 } from '@/lib/memory';
 
-export default function MemoryPanel({
+const MemoryPanel = memo(function MemoryPanel({
   items, setItems, enabled, setEnabled,
 }: {
   items: MemoryItem[];
@@ -107,4 +107,5 @@ export default function MemoryPanel({
       </div>
     </section>
   );
-}
+});
+export default MemoryPanel;

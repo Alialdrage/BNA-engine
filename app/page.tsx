@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import MemoryPanel from '@/components/MemoryPanel';
 import { memoryToContext, normalizeItems, type MemoryItem } from '@/lib/memory';
 import ProjectDownloads from '@/components/ProjectDownloads';
@@ -173,22 +173,22 @@ export default function BNAEngine() {
     speak(t.output, () => setSpeakingId(null));
   }
 
-  function setMemItems(next: MemoryItem[]) {
+  const setMemItems = useCallback((next: MemoryItem[]) => {
     setMemItemsState(next);
     try { localStorage.setItem('bna-memory-v1', JSON.stringify(next)); } catch { /* غير متاح */ }
-  }
+  }, []);
 
-  function setMemOn(v: boolean) {
+  const setMemOn = useCallback((v: boolean) => {
     setMemOnState(v);
     try { localStorage.setItem('bna-memory-on', v ? '1' : '0'); } catch { /* غير متاح */ }
-  }
+  }, []);
 
-  const memoryCtx = memOn ? memoryToContext(memItems) : '';
+  const memoryCtx = useMemo(() => memOn ? memoryToContext(memItems) : '', [memOn, memItems]);
 
-  function setSkills(next: CustomSkill[]) {
+  const setSkills = useCallback((next: CustomSkill[]) => {
     setSkillsState(next);
     try { localStorage.setItem('bna-skills-v1', JSON.stringify(next)); } catch { /* غير متاح */ }
-  }
+  }, []);
 
   function saveStyle(v: string) {
     setStyle(v);
@@ -383,7 +383,7 @@ export default function BNAEngine() {
       <div className="relative mx-auto max-w-4xl">
         <header
           onMouseMove={trackPointer}
-          className="glass spotlight fade-up rounded-3xl py-10 text-center"
+          className="glass spotlight rounded-3xl py-10 text-center"
         >
           <h1 className="neon-text text-5xl font-black sm:text-6xl">BNA Engine V3</h1>
           <p className="mt-3 text-sm tracking-[0.3em] text-cyan-200/80">
@@ -645,7 +645,7 @@ export default function BNAEngine() {
         {error && (
           <div
             role="alert"
-            className="fade-up mt-6 rounded-3xl border border-rose-400/40 bg-rose-500/10 p-4 text-rose-200 shadow-[0_0_30px_rgba(244,63,94,0.25)]"
+            className="mt-6 rounded-3xl border border-rose-400/40 bg-rose-500/10 p-4 text-rose-200 shadow-[0_0_30px_rgba(244,63,94,0.25)]"
           >
             {error}
           </div>
@@ -663,7 +663,7 @@ export default function BNAEngine() {
         )}
 
         {live && (
-          <section aria-live="polite" className="glass fade-up mt-3 rounded-3xl p-6">
+          <section aria-live="polite" className="glass mt-3 rounded-3xl p-6">
             <div className="mb-2 text-xs text-cyan-200/60">أنت: {live.input.slice(0, 120)}</div>
             {live.output ? <Output text={live.output} /> : <span className="text-cyan-200/60">…</span>}
           </section>
@@ -673,7 +673,7 @@ export default function BNAEngine() {
           <section
             key={t.id}
             onMouseMove={trackPointer}
-            className="glass spotlight fade-up mt-3 rounded-3xl p-6"
+            className="glass spotlight mt-3 rounded-3xl p-6"
           >
             <div className="mb-2 flex items-center justify-between gap-3 text-xs">
               <span className="min-w-0 truncate text-cyan-200/60">أنت: {t.input.slice(0, 120)}</span>

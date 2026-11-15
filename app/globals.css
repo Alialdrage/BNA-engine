@@ -72,6 +72,8 @@
     filter: blur(80px);
     pointer-events: none;
     animation: float 14s ease-in-out infinite;
+    will-change: transform;
+    contain: strict;
   }
 
   .fade-up {
