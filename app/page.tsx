@@ -6,8 +6,6 @@ import { memoryToContext, normalizeItems, type MemoryItem } from '@/lib/memory';
 import ProjectDownloads from '@/components/ProjectDownloads';
 import SkillsPanel from '@/components/SkillsPanel';
 import { normalizeSkill, type CustomSkill } from '@/lib/custom-skills';
-import BookStudio from '@/components/BookStudio';
-import Games from '@/components/Games';
 import { streamBnaFull } from '@/lib/client-api';
 import { ENGINES, MAX_INPUT_LENGTH, parseSlash, slashSuggestions, type EngineId } from '@/lib/engines';
 import { hostOf, linkify } from '@/lib/linkify';
@@ -391,158 +389,6 @@ export default function BNAEngine() {
           </p>
         </header>
 
-        <div className="mt-4 flex justify-center">
-          <button
-            type="button"
-            aria-expanded={menuOpen}
-            onClick={() => {
-              if (menuOpen) setTab('engines');
-              setMenuOpen((v) => !v);
-            }}
-            className="rounded-full border border-cyan-300/25 px-4 py-1.5 text-xs font-bold text-cyan-200/80 transition hover:border-cyan-300 hover:text-white"
-          >
-            {menuOpen ? '✕ إخفاء الأدوات' : '☰ الأدوات والمهارات'}
-          </button>
-        </div>
-
-        {menuOpen && (
-        <nav className="mt-4 flex justify-center gap-2" aria-label="الأقسام">
-          {([['engines', '⚡ المحركات'], ['books', '📖 الكتب'], ['games', '🎮 الألعاب']] as const).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={tab === id}
-              onClick={() => setTab(id)}
-              className={`rounded-full border px-5 py-2 text-sm font-bold transition ${
-                tab === id
-                  ? 'border-cyan-300/70 bg-gradient-to-r from-cyan-300 to-indigo-400 text-slate-950 shadow-[0_0_20px_rgba(34,211,238,0.5)]'
-                  : 'glass text-cyan-200'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-        )}
-
-        {tab === 'games' ? (
-          <Games />
-        ) : tab === 'books' ? (
-          <BookStudio />
-        ) : (
-          <>
-
-        {menuOpen && (
-          <>
-        <MemoryPanel items={memItems} setItems={setMemItems} enabled={memOn} setEnabled={setMemOn} />
-        <SkillsPanel skills={skills} setSkills={setSkills} active={activeSkill} setActive={setActiveSkill} />
-        <section className="glass mt-6 rounded-3xl p-4">
-          <details className="mb-3">
-            <summary className="cursor-pointer text-sm font-bold text-cyan-200">✍️ أسلوبي في الكتابة (يُطبَّق على الكتابة والتحرير)</summary>
-            <textarea
-              aria-label="وصف أسلوبي"
-              value={style}
-              maxLength={1500}
-              onChange={(e) => saveStyle(e.target.value)}
-              placeholder="مثال: نبرة ودية، جمل قصيرة، فصحى مبسطة، أتجنب المبالغة، أحب الأمثلة العراقية. ألصق هنا فقرة من كتابتك ليحاكيها."
-              className="mt-2 h-24 w-full rounded-xl border border-cyan-300/20 bg-slate-950/60 p-3 text-sm text-slate-100"
-            />
-            <p className="mt-1 text-xs text-cyan-200/60">يُحفظ في متصفحك فقط، ويُرسل مع طلبات الكتابة ({style.length}/1500).</p>
-          </details>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <button
-              type="button"
-              aria-pressed={chainMode}
-              onClick={() => setChainMode((v) => !v)}
-              className={`rounded-full border px-4 py-1.5 text-sm font-bold transition ${
-                chainMode ? 'border-cyan-300 bg-cyan-300/20 text-white' : 'border-cyan-300/30 text-cyan-200 hover:border-cyan-300'
-              }`}
-            >
-              🔗 دمج المهارات {chainMode ? '(مفعّل)' : ''}
-            </button>
-            {chainMode && (
-              <select
-                aria-label="سلاسل جاهزة"
-                className="rounded-xl border border-cyan-300/20 bg-slate-950/60 px-3 py-1.5 text-sm text-slate-100"
-                value=""
-                onChange={(e) => {
-                  const p = PRESETS.find((x) => x.id === e.target.value);
-                  if (p) setChain(p.steps);
-                }}
-              >
-                <option value="">سلاسل جاهزة…</option>
-                {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            )}
-          </div>
-          {chainMode ? (
-            <div className="mt-3">
-              <p className="text-xs text-cyan-200/70">
-                اضغط على المهارات بالترتيب (حتى {MAX_STEPS})، وناتج كل واحدة يدخل التي بعدها. تحتاج خطوتين على الأقل.
-              </p>
-              <ol className="mt-2 flex flex-wrap items-center gap-2" aria-label="خطوات السلسلة">
-                {chain.length === 0 && <li className="text-sm text-cyan-200/50">لم تختر شيئاً بعد</li>}
-                {chain.map((id, i) => {
-                  const e = ENGINES.find((x) => x.id === id)!;
-                  return (
-                    <li key={`${id}-${i}`} className="flex items-center gap-1">
-                      {i > 0 && <span className="text-cyan-300">←</span>}
-                      <button
-                        type="button"
-                        title="إزالة الخطوة"
-                        onClick={() => setChain((c) => c.filter((_, j) => j !== i))}
-                        className="rounded-full border border-cyan-300/40 bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-100 hover:border-rose-300 hover:text-rose-200"
-                      >
-                        {i + 1}. {e.icon} {e.name} ✕
-                      </button>
-                    </li>
-                  );
-                })}
-                {chain.length > 0 && (
-                  <li><button type="button" onClick={() => setChain([])} className="text-xs text-rose-300 hover:underline">مسح</button></li>
-                )}
-              </ol>
-            </div>
-          ) : (
-            <p className="mt-2 text-xs text-cyan-200/60">فعّل الدمج لتوصيل عدة مهارات: مثلاً ابحث ← لخّص ← ترجم.</p>
-          )}
-        </section>
-
-        {(['ai', 'local'] as const).map((group) => (
-          <div key={group} className="mt-6">
-            <h2 className="mb-2 text-xs font-bold tracking-wider text-cyan-200/70">
-              {group === 'ai' ? 'ذكاء اصطناعي (يحتاج مفتاحاً)' : 'مهارات محلية (بدون مفتاح)'}
-            </h2>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8">
-              {ENGINES.filter((e) => e.group === group).map((e) => {
-                const active = chainMode ? chain.includes(e.id) : engine === e.id;
-                return (
-                  <button
-                    key={e.id}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => (chainMode ? setChain((c) => addStep(c, e.id)) : (setActiveSkill(null), setEngine(e.id)))}
-                    onMouseMove={trackPointer}
-                    className={`spotlight group rounded-2xl border p-3 transition duration-300 hover:-translate-y-1 active:scale-95 ${
-                      active
-                        ? 'border-cyan-300/70 bg-gradient-to-br from-cyan-300 via-sky-400 to-indigo-500 text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.6)]'
-                        : 'glass text-cyan-200 hover:shadow-[0_0_25px_rgba(34,211,238,0.35)]'
-                    }`}
-                  >
-                    <div className="text-2xl transition duration-300 group-hover:scale-110">
-                      {e.icon}
-                    </div>
-                    <div className="mt-1 text-xs font-bold">{e.name}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-
-          </>
-        )}
-
         <section
           onMouseMove={trackPointer}
           className="glass spotlight mt-6 rounded-3xl p-5 transition duration-300 focus-within:shadow-[0_0_50px_rgba(34,211,238,0.3)]"
@@ -693,8 +539,6 @@ export default function BNAEngine() {
             <ProjectDownloads output={t.output} />
           </section>
         ))}
-          </>
-        )}
       </div>
     </main>
   );
